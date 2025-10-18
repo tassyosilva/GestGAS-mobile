@@ -1,6 +1,6 @@
 import { api } from './apiService';
 import { API_ENDPOINTS } from '../config/api';
-import { Pedido, PedidoDetalhes } from '../types';
+import { Pedido, PedidoDetalhes, ConfirmarEntregaRequest } from '../types';
 
 interface ListarPedidosParams {
     entregador_id?: number;
@@ -40,11 +40,11 @@ class PedidosService {
         }
     }
 
-    async confirmarEntrega(pedidoId: number): Promise<void> {
+    // ATUALIZADO: Agora aceita array de cascos selecionados
+    async confirmarEntrega(dados: ConfirmarEntregaRequest): Promise<void> {
         try {
-            await api.post(API_ENDPOINTS.CONFIRMAR_ENTREGA, {
-                pedido_id: pedidoId,
-            });
+            console.log('Confirmando entrega com dados:', dados);
+            await api.post(API_ENDPOINTS.CONFIRMAR_ENTREGA, dados);
         } catch (error) {
             console.error('Erro ao confirmar entrega:', error);
             throw error;
@@ -59,6 +59,20 @@ class PedidosService {
         } catch (error) {
             console.error('Erro ao registrar botijas:', error);
             throw error;
+        }
+    }
+
+    // NOVO: Buscar cascos disponíveis do grupo
+    async buscarCascosDoGrupo(grupoId: number): Promise<any[]> {
+        try {
+            const response = await api.get(`/grupos-botijas/${grupoId}/produtos`);
+
+            // Filtrar apenas produtos do tipo "casco"
+            const produtos = response.data || [];
+            return produtos.filter((p: any) => p.categoria === 'casco');
+        } catch (error) {
+            console.error('Erro ao buscar cascos do grupo:', error);
+            return [];
         }
     }
 }

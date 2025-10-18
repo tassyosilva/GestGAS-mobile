@@ -17,6 +17,8 @@ import { PedidoDetalhes, ItemPedido } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import MapViewComponent from '../components/MapView';
 import * as Linking from 'expo-linking';
+import SelecionarCascosModal from '../components/SelecionarCascosModal';
+import { gruposService } from '../services/gruposService';
 
 interface Props {
     route: any;
@@ -32,6 +34,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [geocoding, setGeocoding] = useState(false);
     const [geocodeError, setGeocodeError] = useState<string | null>(null);
+    const [mostrarModalCascos, setMostrarModalCascos] = useState(false);
+    const [gruposComRetorno, setGruposComRetorno] = useState<Map<number, any[]>>(new Map());
+    const [verificandoGrupos, setVerificandoGrupos] = useState(false);
 
     useEffect(() => {
         loadPedidoDetalhes();
@@ -162,6 +167,39 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const handleConfirmarEntrega = async () => {
         if (!pedido) return;
 
+        console.log('=== INICIANDO CONFIRMAÇÃO DE ENTREGA ===');
+
+        // Verificar se há produtos com retorno de botija
+        const temBotijasParaRetornar = pedido.itens.some(
+            (item: ItemPedido) => item.retorna_botija
+        );
+
+        console.log('Tem botijas para retornar?', temBotijasParaRetornar);
+
+        if (!temBotijasParaRetornar) {
+            // Caso simples: sem botijas retornáveis
+            confirmarSemSelecaoCascos();
+            return;
+        }
+
+        // Verificar se há grupos retornáveis
+        const temGrupos = await verificarGruposRetornaveis();
+        console.log('Tem grupos retornáveis?', temGrupos);
+
+        if (temGrupos) {
+            // Mostrar modal de seleção de cascos
+            console.log('Abrindo modal de seleção de cascos');
+            setMostrarModalCascos(true);
+        } else {
+            // Confirmar sem seleção (produtos retornáveis mas sem grupos)
+            confirmarSemSelecaoCascos();
+        }
+    };
+
+    // Confirmar entrega SEM seleção de cascos
+    const confirmarSemSelecaoCascos = () => {
+        if (!pedido) return;
+
         Alert.alert(
             'Confirmar Entrega',
             'Deseja confirmar que este pedido foi entregue?',
@@ -173,7 +211,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                         try {
                             setConfirmingDelivery(true);
 
-                            await pedidosService.confirmarEntrega(pedido.id);
+                            await pedidosService.confirmarEntrega({
+                                pedido_id: pedido.id,
+                            });
 
                             const temBotijasParaRetornar = pedido.itens.some(
                                 (item: ItemPedido) => item.retorna_botija
@@ -218,6 +258,63 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 },
             ]
         );
+    };
+
+    // Confirmar entrega COM cascos selecionados
+    const confirmarComCascosSelecionados = async (cascosSelecionados: number[]) => {
+        if (!pedido) return;
+
+        console.log('=== CONFIRMANDO COM CASCOS SELECIONADOS ===');
+        console.log('Cascos:', cascosSelecionados);
+
+        setMostrarModalCascos(false);
+        setConfirmingDelivery(true);
+
+        try {
+            await pedidosService.confirmarEntrega({
+                pedido_id: pedido.id,
+                cascos: cascosSelecionados,
+            });
+
+            Alert.alert(
+                'Sucesso',
+                'Entrega confirmada com os cascos selecionados!',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+        } catch (error: any) {
+            console.error('Erro ao confirmar entrega com cascos:', error);
+
+            let errorMessage = 'Erro ao confirmar entrega';
+            if (error.response?.data) {
+                errorMessage = typeof error.response.data === 'string'
+                    ? error.response.data
+                    : error.response.data.message || errorMessage;
+            }
+
+            Alert.alert('Erro', errorMessage);
+        } finally {
+            setConfirmingDelivery(false);
+        }
+    };
+
+    const verificarGruposRetornaveis = async () => {
+        if (!pedido) return false;
+
+        console.log('=== VERIFICANDO GRUPOS RETORNÁVEIS ===');
+        setVerificandoGrupos(true);
+
+        try {
+            const grupos = await gruposService.obterGruposDoPedido(pedido.id);
+            console.log('Grupos com retorno encontrados:', grupos.size);
+
+            setGruposComRetorno(grupos);
+            return grupos.size > 0;
+        } catch (error) {
+            console.error('Erro ao verificar grupos:', error);
+            return false;
+        } finally {
+            setVerificandoGrupos(false);
+        }
     };
 
     const getStatusColor = (status: string): string => {
@@ -383,6 +480,13 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                 <View style={{ height: 20 }} />
             </ScrollView>
+            <SelecionarCascosModal
+                visible={mostrarModalCascos}
+                pedidoId={pedido?.id || 0}
+                gruposComRetorno={gruposComRetorno}
+                onConfirm={confirmarComCascosSelecionados}
+                onCancel={() => setMostrarModalCascos(false)}
+            />
         </View>
     );
 }

@@ -49,3 +49,33 @@ export interface AppConfig {
     token: string | null;
     user: Usuario | null;
 }
+
+// Tipos para Grupos e Cascos
+export interface GrupoBotija {
+    id: number;
+    nome: string;
+    descricao?: string;
+}
+
+export interface ProdutoGrupo {
+    produto_id: number;
+    produto_nome: string;
+    grupo_id: number;
+    grupo_nome: string;
+    categoria: string;
+}
+
+export interface CascoDisponivel {
+    id: number;
+    nome: string;
+    categoria: string;
+    grupo_id?: number;
+    grupo_nome?: string;
+    produto_principal_id?: number;
+    produto_principal_nome?: string;
+}
+
+export interface ConfirmarEntregaRequest {
+    pedido_id: number;
+    cascos?: number[]; // IDs dos cascos selecionados pelo entregador
+}
