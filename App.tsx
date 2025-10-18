@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ConfiguracaoInicialScreen from './src/screens/ConfiguracaoInicialScreen';
 import MinhasEntregasScreen from './src/screens/MinhasEntregasScreen';
+import DetalhesPedidoScreen from './src/screens/DetalhesPedidoScreen';
 import { authService } from './src/services/authService';
 
 const Stack = createNativeStackNavigator();
@@ -50,14 +51,20 @@ export default function App() {
             )}
           </Stack.Screen>
         ) : (
-          <Stack.Screen name="MinhasEntregas">
-            {(props) => (
-              <MinhasEntregasScreen
-                {...props}
-                onLogout={handleLogout}
-              />
-            )}
-          </Stack.Screen>
+          <>
+            <Stack.Screen name="MinhasEntregas">
+              {(props) => (
+                <MinhasEntregasScreen
+                  {...props}
+                  onLogout={handleLogout}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen
+              name="DetalhesPedido"
+              component={DetalhesPedidoScreen}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -8,4 +8,8 @@ export const API_ENDPOINTS = {
     CONFIRMAR_ENTREGA: '/api/pedidos/confirmar-entrega',
     REGISTRAR_BOTIJAS: '/api/pedidos/registrar-botijas',
     PEDIDO_DETALHES: (id: number) => `/api/pedidos/${id}`,
+
+    // Adicionar endpoint de geocoding (OpenStreetMap Nominatim)
+    GEOCODE: (address: string) =>
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
 };
