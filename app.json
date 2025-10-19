@@ -23,14 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1976d2"
       },
-      "package": "com.gestgas.entregas",
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "VIBRATE"
-      ]
+      "package": "com.gestgas.entregas"
     },
     "plugins": [
       [
@@ -46,6 +39,11 @@
           "color": "#1976d2"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1ebcd058-e68d-42a3-b0a3-4d57e8adae4d"
+      }
+    }
   }
 }
