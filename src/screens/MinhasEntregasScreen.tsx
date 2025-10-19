@@ -44,17 +44,14 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     useEffect(() => {
         if (user) {
             loadPedidos();
-            if (showFinalizados) {
-                loadPedidosFinalizados();
-            }
         }
     }, [user, page]);
 
     useEffect(() => {
-        if (user && showFinalizados) {
+        if (user && pageFinalizados > 0) {
             loadPedidosFinalizados();
         }
-    }, [pageFinalizados, showFinalizados]);
+    }, [pageFinalizados]); // Depende apenas da MUDANÇA da página.
 
     const loadUser = async () => {
         try {
@@ -70,7 +67,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         if (!user) return;
 
         try {
-            setLoading(true);
+            if (page === 0) setLoading(true);
 
             const response = await pedidosService.listarPedidosEntregador({
                 entregador_id: user.id,
@@ -87,9 +84,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             }
         } catch (error: any) {
             console.error('Erro ao carregar entregas:', error);
-
             let errorMessage = 'Erro ao carregar entregas';
-
             if (error.response?.status === 401 || error.message === 'Sessão expirada') {
                 errorMessage = 'Sessão expirada. Faça login novamente.';
                 await authService.logout();
@@ -97,7 +92,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             } else if (error.message.includes('Network Error')) {
                 errorMessage = 'Erro de conexão. Verifique sua internet.';
             }
-
             Alert.alert('Erro', errorMessage);
         } finally {
             setLoading(false);
@@ -106,7 +100,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     };
 
     const loadPedidosFinalizados = async () => {
-        if (!user) return;
+        if (!user || loadingFinalizados) return;
 
         try {
             setLoadingFinalizados(true);
@@ -118,7 +112,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             });
 
             if (response && response.pedidos) {
-                // Mapear os dados para o tipo PedidoResolvido
                 const pedidosResolvidosData = response.pedidos.map((p: any) => ({
                     id: p.id,
                     data_entregador_atribuido: p.data_entregador_atribuido,
@@ -131,9 +124,14 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                     forma_pagamento: p.forma_pagamento,
                 }));
 
-                setPedidosFinalizados(pedidosResolvidosData);
+                if (pageFinalizados === 0) {
+                    setPedidosFinalizados(pedidosResolvidosData);
+                } else {
+                    setPedidosFinalizados(prevPedidos => [...prevPedidos, ...pedidosResolvidosData]);
+                }
+
                 setTotalFinalizados(response.total || 0);
-            } else {
+            } else if (pageFinalizados === 0) {
                 setPedidosFinalizados([]);
                 setTotalFinalizados(0);
             }
@@ -147,7 +145,10 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         setPage(0);
+        // Garantir que a atualização zere e recarregue ambos
         setPageFinalizados(0);
+        setPedidosFinalizados([]); // Limpa a lista para garantir uma recarga limpa
+
         loadPedidos();
         if (showFinalizados) {
             loadPedidosFinalizados();
@@ -160,8 +161,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
     const handleLogout = () => {
         Alert.alert(
-            'Sair',
-            'Deseja realmente sair?',
+            'Sair', 'Deseja realmente sair?',
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
@@ -187,10 +187,18 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
     };
 
+    // Centralizar a lógica de carregamento inicial aqui
     const toggleFinalizados = () => {
         const newState = !showFinalizados;
         setShowFinalizados(newState);
+
+        // Se estiver abrindo o painel E a lista estiver vazia, carrega a primeira página.
+        // Se a lista já tiver itens, apenas a exibe sem recarregar.
         if (newState && pedidosFinalizados.length === 0) {
+            // Garante que a paginação comece do zero antes de carregar
+            if (pageFinalizados !== 0) {
+                setPageFinalizados(0);
+            }
             loadPedidosFinalizados();
         }
     };
@@ -211,7 +219,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 <Text style={styles.finalizadoId}>#{item.id}</Text>
                 <Text style={styles.finalizadoCliente}>{item.cliente_nome}</Text>
             </View>
-
             <View style={styles.finalizadoInfo}>
                 {item.bairro && (
                     <View style={styles.finalizadoRow}>
@@ -219,7 +226,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                         <Text style={styles.finalizadoText}>{item.bairro}</Text>
                     </View>
                 )}
-
                 {item.data_entregador_atribuido && (
                     <View style={styles.finalizadoRow}>
                         <Ionicons name="person-outline" size={14} color="#666" />
@@ -228,7 +234,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                         </Text>
                     </View>
                 )}
-
                 {item.data_entrega && (
                     <View style={styles.finalizadoRow}>
                         <Ionicons name="checkmark-circle-outline" size={14} color="#4caf50" />
@@ -237,14 +242,12 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                         </Text>
                     </View>
                 )}
-
                 <View style={styles.finalizadoRow}>
                     <Ionicons name="time-outline" size={14} color="#666" />
                     <Text style={styles.finalizadoText}>
                         Tempo: {calcularTempoEntrega(item.data_entregador_atribuido, item.data_entrega)}
                     </Text>
                 </View>
-
                 {item.forma_pagamento && (
                     <View style={styles.finalizadoRow}>
                         <Ionicons name="card-outline" size={14} color="#666" />
@@ -257,21 +260,12 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
     const renderFooter = () => {
         if (!loading || pedidos.length === 0) return null;
-
-        return (
-            <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color="#1976d2" />
-            </View>
-        );
+        return <ActivityIndicator style={styles.loadingFooter} color="#1976d2" />;
     };
 
     const renderFooterFinalizados = () => {
         if (!loadingFinalizados) return null;
-        return (
-            <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color="#1976d2" />
-            </View>
-        );
+        return <ActivityIndicator style={styles.loadingFooter} color="#1976d2" />;
     };
 
     return (
@@ -281,14 +275,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>Minhas Entregas</Text>
-                    {user && (
-                        <Text style={styles.headerSubtitle}>{user.nome}</Text>
-                    )}
+                    {user && <Text style={styles.headerSubtitle}>{user.nome}</Text>}
                 </View>
-                <TouchableOpacity
-                    onPress={handleLogout}
-                    style={styles.logoutButton}
-                >
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
                     <Ionicons name="log-out-outline" size={24} color="#fff" />
                 </TouchableOpacity>
             </View>
@@ -308,10 +297,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 data={pedidos}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
-                    <PedidoCard
-                        pedido={item}
-                        onPress={() => handlePedidoPress(item)}
-                    />
+                    <PedidoCard pedido={item} onPress={() => handlePedidoPress(item)} />
                 )}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={loading ? null : renderEmpty}
@@ -326,38 +312,24 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 }
             />
 
-            {/* Botão para expandir/recolher histórico */}
-            <TouchableOpacity
-                style={styles.historicoButton}
-                onPress={toggleFinalizados}
-            >
-                <Ionicons
-                    name={showFinalizados ? "chevron-down" : "chevron-up"}
-                    size={24}
-                    color="#fff"
-                />
+            <TouchableOpacity style={styles.historicoButton} onPress={toggleFinalizados}>
+                <Ionicons name={showFinalizados ? "chevron-down" : "chevron-up"} size={24} color="#fff" />
                 <Text style={styles.historicoButtonText}>
                     {showFinalizados ? 'Ocultar' : 'Ver'} Histórico ({totalFinalizados})
                 </Text>
             </TouchableOpacity>
 
-            {/* Lista de pedidos finalizados */}
             {showFinalizados && (
                 <View style={styles.finalizadosContainer}>
                     <View style={styles.finalizadosHeader}>
                         <Ionicons name="checkmark-done" size={20} color="#4caf50" />
                         <Text style={styles.finalizadosTitle}>Histórico de Entregas</Text>
                     </View>
-
                     {loadingFinalizados && pedidosFinalizados.length === 0 ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="small" color="#1976d2" />
-                        </View>
+                        <ActivityIndicator style={styles.loadingContainer} color="#1976d2" />
                     ) : pedidosFinalizados.length === 0 ? (
                         <View style={styles.emptyFinalizadosContainer}>
-                            <Text style={styles.emptyFinalizadosText}>
-                                Nenhuma entrega finalizada ainda
-                            </Text>
+                            <Text style={styles.emptyFinalizadosText}>Nenhuma entrega finalizada ainda</Text>
                         </View>
                     ) : (
                         <FlatList
@@ -492,7 +464,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         backgroundColor: '#fff',
-        height: '60%', // Mudado de maxHeight para height fixo
+        height: '60%',
         borderTopLeftRadius: 16,
         borderTopRightRadius: 16,
         shadowColor: '#000',
@@ -508,7 +480,6 @@ const styles = StyleSheet.create({
         padding: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
-        backgroundColor: '#fff',
     },
     finalizadosTitle: {
         fontSize: 16,
