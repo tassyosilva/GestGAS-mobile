@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { pedidosService } from '../services/pedidoService';
@@ -37,48 +38,87 @@ export default function SelecionarCascosModal({
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        console.log('Modal visível:', visible);
+        console.log('Grupos com retorno (tamanho):', gruposComRetorno.size);
+        console.log('Grupos com retorno (detalhes):', Array.from(gruposComRetorno.entries()));
+
         if (visible && gruposComRetorno.size > 0) {
             carregarCascos();
+        } else if (visible && gruposComRetorno.size === 0) {
+            console.warn('⚠️ Modal aberto mas nenhum grupo encontrado!');
         }
-    }, [visible, pedidoId]);
+    }, [visible, pedidoId, gruposComRetorno]);
 
     const carregarCascos = async () => {
         setLoading(true);
-        console.log('Carregando cascos para grupos:', gruposComRetorno);
+        console.log('=== CARREGANDO CASCOS ===');
+        console.log('Grupos para processar:', gruposComRetorno.size);
 
         try {
             const todasOpcoes: CascoOpcao[] = [];
 
             // Para cada grupo com produtos retornáveis
             for (const [grupoId, produtos] of gruposComRetorno.entries()) {
-                console.log(`Buscando cascos do grupo ${grupoId}`);
+                console.log(`\n--- Processando Grupo ${grupoId} ---`);
+                console.log('Produtos do grupo:', produtos);
 
                 // Buscar cascos deste grupo
                 const cascosDoGrupo = await pedidosService.buscarCascosDoGrupo(grupoId);
-
                 console.log(`Cascos encontrados para grupo ${grupoId}:`, cascosDoGrupo);
+
+                if (cascosDoGrupo.length === 0) {
+                    console.warn(`⚠️ Nenhum casco encontrado para o grupo ${grupoId}`);
+                    continue;
+                }
 
                 // Adicionar cada casco como opção
                 for (const casco of cascosDoGrupo) {
+                    const cascoId = casco.id || casco.produto_id;
+                    const cascoNome = casco.nome || casco.produto_nome;
+
+                    if (!cascoId || !cascoNome) {
+                        console.warn('Casco com dados incompletos:', casco);
+                        continue;
+                    }
+
                     todasOpcoes.push({
-                        id: casco.id || casco.produto_id,
-                        nome: casco.nome || casco.produto_nome,
+                        id: cascoId,
+                        nome: cascoNome,
                         grupo_nome: produtos[0]?.grupo_nome || `Grupo ${grupoId}`,
                         selecionado: false,
                     });
+
+                    console.log(`✅ Adicionado casco: ${cascoNome} (ID: ${cascoId})`);
                 }
             }
 
-            console.log('Total de opções de cascos:', todasOpcoes);
+            console.log('\n=== RESUMO ===');
+            console.log('Total de opções de cascos:', todasOpcoes.length);
+            console.log('Cascos disponíveis:', todasOpcoes.map(c => `${c.nome} (${c.grupo_nome})`));
+
+            if (todasOpcoes.length === 0) {
+                Alert.alert(
+                    'Aviso',
+                    'Nenhum casco disponível foi encontrado para os produtos retornáveis deste pedido.',
+                    [{ text: 'OK', onPress: onCancel }]
+                );
+            }
+
             setCascos(todasOpcoes);
         } catch (error) {
-            console.error('Erro ao carregar cascos:', error);
+            console.error('❌ Erro ao carregar cascos:', error);
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar as opções de cascos. Tente novamente.',
+                [{ text: 'OK', onPress: onCancel }]
+            );
         } finally {
             setLoading(false);
         }
     };
 
     const toggleCasco = (cascoId: number) => {
+        console.log('Alternando seleção do casco:', cascoId);
         setCascos((prev) =>
             prev.map((c) =>
                 c.id === cascoId ? { ...c, selecionado: !c.selecionado } : c
@@ -91,7 +131,19 @@ export default function SelecionarCascosModal({
             .filter((c) => c.selecionado)
             .map((c) => c.id);
 
+        console.log('=== CONFIRMANDO SELEÇÃO ===');
         console.log('Cascos selecionados:', selecionados);
+        console.log('Quantidade:', selecionados.length);
+
+        if (selecionados.length === 0) {
+            Alert.alert(
+                'Atenção',
+                'Selecione pelo menos um casco que foi devolvido pelo cliente.',
+                [{ text: 'OK' }]
+            );
+            return;
+        }
+
         onConfirm(selecionados);
     };
 
@@ -106,6 +158,7 @@ export default function SelecionarCascosModal({
         >
             <View style={styles.overlay}>
                 <View style={styles.container}>
+                    {/* Header */}
                     <View style={styles.header}>
                         <Text style={styles.title}>Selecionar Cascos Retornados</Text>
                         <TouchableOpacity onPress={onCancel} style={styles.closeButton}>
@@ -127,9 +180,9 @@ export default function SelecionarCascosModal({
                             <ScrollView style={styles.scrollView}>
                                 {cascos.length === 0 ? (
                                     <View style={styles.emptyContainer}>
-                                        <Ionicons name="information-circle" size={48} color="#ccc" />
+                                        <Ionicons name="information-circle-outline" size={48} color="#999" />
                                         <Text style={styles.emptyText}>
-                                            Nenhum casco retornável encontrado neste pedido
+                                            Nenhum casco disponível encontrado
                                         </Text>
                                     </View>
                                 ) : (
@@ -138,10 +191,9 @@ export default function SelecionarCascosModal({
                                             key={casco.id}
                                             style={[
                                                 styles.cascoItem,
-                                                casco.selecionado && styles.cascoItemSelecionado,
+                                                casco.selecionado && styles.cascoItemSelected,
                                             ]}
                                             onPress={() => toggleCasco(casco.id)}
-                                            activeOpacity={0.7}
                                         >
                                             <View style={styles.cascoInfo}>
                                                 <Text style={styles.cascoNome}>{casco.nome}</Text>
@@ -150,7 +202,7 @@ export default function SelecionarCascosModal({
                                             <View
                                                 style={[
                                                     styles.checkbox,
-                                                    casco.selecionado && styles.checkboxSelecionado,
+                                                    casco.selecionado && styles.checkboxSelected,
                                                 ]}
                                             >
                                                 {casco.selecionado && (
@@ -162,11 +214,12 @@ export default function SelecionarCascosModal({
                                 )}
                             </ScrollView>
 
+                            {/* Footer com contador e botões */}
                             <View style={styles.footer}>
-                                <Text style={styles.footerText}>
-                                    {cascosSelecionados} casco(s) selecionado(s)
+                                <Text style={styles.counterText}>
+                                    {cascosSelecionados} {cascosSelecionados === 1 ? 'casco selecionado' : 'cascos selecionados'}
                                 </Text>
-                                <View style={styles.footerButtons}>
+                                <View style={styles.buttonRow}>
                                     <TouchableOpacity
                                         style={styles.cancelButton}
                                         onPress={onCancel}
@@ -214,7 +267,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: '#eee',
     },
     title: {
         fontSize: 18,
@@ -230,7 +283,8 @@ const styles = StyleSheet.create({
         color: '#666',
         padding: 16,
         paddingTop: 12,
-        paddingBottom: 8,
+        paddingBottom: 12,
+        backgroundColor: '#f5f5f5',
     },
     loadingContainer: {
         padding: 40,
@@ -243,32 +297,28 @@ const styles = StyleSheet.create({
     },
     scrollView: {
         maxHeight: 400,
-        paddingHorizontal: 16,
     },
     emptyContainer: {
         padding: 40,
         alignItems: 'center',
     },
     emptyText: {
+        marginTop: 12,
         fontSize: 14,
         color: '#999',
-        marginTop: 12,
         textAlign: 'center',
     },
     cascoItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'space-between',
         padding: 16,
-        backgroundColor: '#f9f9f9',
-        borderRadius: 12,
-        marginBottom: 8,
-        borderWidth: 2,
-        borderColor: 'transparent',
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        backgroundColor: '#fff',
     },
-    cascoItemSelecionado: {
+    cascoItemSelected: {
         backgroundColor: '#e3f2fd',
-        borderColor: '#1976d2',
     },
     cascoInfo: {
         flex: 1,
@@ -276,40 +326,40 @@ const styles = StyleSheet.create({
     },
     cascoNome: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '500',
         color: '#333',
         marginBottom: 4,
     },
     cascoGrupo: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#666',
     },
     checkbox: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         borderWidth: 2,
         borderColor: '#ccc',
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    checkboxSelecionado: {
+    checkboxSelected: {
         backgroundColor: '#1976d2',
         borderColor: '#1976d2',
     },
     footer: {
         padding: 16,
-        paddingTop: 12,
+        paddingBottom: 0,
         borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
+        borderTopColor: '#eee',
     },
-    footerText: {
+    counterText: {
         fontSize: 14,
         color: '#666',
         marginBottom: 12,
         textAlign: 'center',
     },
-    footerButtons: {
+    buttonRow: {
         flexDirection: 'row',
         gap: 12,
     },
@@ -318,7 +368,7 @@ const styles = StyleSheet.create({
         padding: 14,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#ddd',
+        borderColor: '#ccc',
         alignItems: 'center',
     },
     cancelButtonText: {
@@ -330,11 +380,11 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 14,
         borderRadius: 8,
-        backgroundColor: '#4caf50',
+        backgroundColor: '#1976d2',
         alignItems: 'center',
     },
     confirmButtonDisabled: {
-        opacity: 0.5,
+        backgroundColor: '#ccc',
     },
     confirmButtonText: {
         fontSize: 16,

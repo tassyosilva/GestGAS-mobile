@@ -23,11 +23,15 @@ export interface ItemPedido {
     id?: number;
     produto_id?: number;
     nome_produto?: string;
+    produto_nome?: string;
     quantidade?: number;
     preco_unitario?: number;
     valor_unitario?: number;
     subtotal?: number;
     retorna_botija: boolean;
+    categoria?: string;
+    grupo_id?: number;
+    grupo_nome?: string;
 }
 
 export interface Pedido {
@@ -77,5 +81,14 @@ export interface CascoDisponivel {
 
 export interface ConfirmarEntregaRequest {
     pedido_id: number;
-    cascos?: number[]; // IDs dos cascos selecionados pelo entregador
+    cascos?: CascoSelecionado; // MANTER ASSIM
+}
+
+export interface CascoSelecionado {
+    [produto_id: string]: CascoQuantidade[];
+}
+
+export interface CascoQuantidade {
+    casco_id: number;
+    quantidade: number;
 }

@@ -8,6 +8,8 @@ import {
     Alert,
     TouchableOpacity,
     Platform,
+    Modal,
+    TextInput,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +19,8 @@ import { PedidoDetalhes, ItemPedido } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import MapViewComponent from '../components/MapView';
 import * as Linking from 'expo-linking';
-import SelecionarCascosModal from '../components/SelecionarCascosModal';
 import { gruposService } from '../services/gruposService';
+import { api } from '../services/apiService';
 
 interface Props {
     route: any;
@@ -34,9 +36,10 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [geocoding, setGeocoding] = useState(false);
     const [geocodeError, setGeocodeError] = useState<string | null>(null);
-    const [mostrarModalCascos, setMostrarModalCascos] = useState(false);
-    const [gruposComRetorno, setGruposComRetorno] = useState<Map<number, any[]>>(new Map());
-    const [verificandoGrupos, setVerificandoGrupos] = useState(false);
+    const [cascoDialogOpen, setCascoDialogOpen] = useState(false);
+    const [cascosDisponiveis, setCascosDisponiveis] = useState<{ [key: number]: any[] }>({});
+    const [quantidadesPorCasco, setQuantidadesPorCasco] = useState<{ [key: number]: { [casco_id: number]: number } }>({});
+    const [produtosComRetorno, setProdutosComRetorno] = useState<ItemPedido[]>([]);
 
     useEffect(() => {
         loadPedidoDetalhes();
@@ -54,10 +57,8 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         const endereco = pedido.endereco_entrega;
         console.log('Abrindo navegação para:', endereco);
 
-        // Encode do endereço
         const enderecoEncoded = encodeURIComponent(endereco);
 
-        // Opções de navegação
         const opcoes = [
             {
                 nome: 'Waze',
@@ -74,15 +75,11 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             },
         ];
 
-        // Tentar abrir em ordem de preferência
         const tentarAbrir = async () => {
-            // 1. Tentar Waze primeiro
             const wazeUrl = opcoes[0].url;
-            if (wazeUrl) { // Verificação para satisfazer o TypeScript
+            if (wazeUrl) {
                 try {
                     const wazeSupported = await Linking.canOpenURL(wazeUrl);
-                    console.log('Waze disponível?', wazeSupported);
-
                     if (wazeSupported) {
                         await Linking.openURL(wazeUrl);
                         return;
@@ -92,14 +89,10 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 }
             }
 
-
-            // 2. Tentar Google Maps app
             const googleMapsUrl = opcoes[1].url;
-            if (googleMapsUrl) { // Verificação para o valor que pode ser undefined
+            if (googleMapsUrl) {
                 try {
                     const googleMapsSupported = await Linking.canOpenURL(googleMapsUrl);
-                    console.log('Google Maps app disponível?', googleMapsSupported);
-
                     if (googleMapsSupported) {
                         await Linking.openURL(googleMapsUrl);
                         return;
@@ -109,9 +102,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 }
             }
 
-            // 3. Fallback: Abrir Google Maps no navegador
             try {
-                console.log('Abrindo Google Maps web...');
                 await Linking.openURL(opcoes[1].webUrl);
             } catch (error) {
                 console.error('Erro ao abrir qualquer opção:', error);
@@ -137,184 +128,208 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     };
 
     const geocodeAddress = async (address: string) => {
-        console.log('=== INICIANDO GEOCODIFICAÇÃO ===');
-        console.log('Endereço para geocodificar:', address);
-
         try {
             setGeocoding(true);
             setGeocodeError(null);
-
             const coords = await geocodingService.geocodeAddress(address);
-
-            console.log('Resultado do geocoding:', coords);
-
             if (coords) {
-                console.log('✅ Coordenadas encontradas, setando location');
                 setLocation(coords);
             } else {
-                console.log('❌ Nenhuma coordenada retornada');
                 setGeocodeError('Não foi possível localizar o endereço no mapa. Tente adicionar mais detalhes como cidade e estado.');
             }
         } catch (error) {
             console.error('❌ Erro capturado no geocodeAddress:', error);
             setGeocodeError('Erro ao buscar localização');
         } finally {
-            console.log('Finalizando geocoding, setando geocoding=false');
             setGeocoding(false);
         }
     };
 
+    // FUNÇÃO handleConfirmarEntrega
     const handleConfirmarEntrega = async () => {
         if (!pedido) return;
 
         console.log('=== INICIANDO CONFIRMAÇÃO DE ENTREGA ===');
-
-        // Verificar se há produtos com retorno de botija
-        const temBotijasParaRetornar = pedido.itens.some(
-            (item: ItemPedido) => item.retorna_botija
-        );
-
-        console.log('Tem botijas para retornar?', temBotijasParaRetornar);
-
-        if (!temBotijasParaRetornar) {
-            // Caso simples: sem botijas retornáveis
-            confirmarSemSelecaoCascos();
-            return;
-        }
-
-        // Verificar se há grupos retornáveis
-        const temGrupos = await verificarGruposRetornaveis();
-        console.log('Tem grupos retornáveis?', temGrupos);
-
-        if (temGrupos) {
-            // Mostrar modal de seleção de cascos
-            console.log('Abrindo modal de seleção de cascos');
-            setMostrarModalCascos(true);
-        } else {
-            // Confirmar sem seleção (produtos retornáveis mas sem grupos)
-            confirmarSemSelecaoCascos();
-        }
-    };
-
-    // Confirmar entrega SEM seleção de cascos
-    const confirmarSemSelecaoCascos = () => {
-        if (!pedido) return;
-
-        Alert.alert(
-            'Confirmar Entrega',
-            'Deseja confirmar que este pedido foi entregue?',
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Confirmar',
-                    onPress: async () => {
-                        try {
-                            setConfirmingDelivery(true);
-
-                            await pedidosService.confirmarEntrega({
-                                pedido_id: pedido.id,
-                            });
-
-                            const temBotijasParaRetornar = pedido.itens.some(
-                                (item: ItemPedido) => item.retorna_botija
-                            );
-
-                            if (temBotijasParaRetornar) {
-                                try {
-                                    await pedidosService.registrarBotijas(pedido.id);
-                                    Alert.alert(
-                                        'Sucesso',
-                                        'Entrega confirmada e botijas vazias registradas!',
-                                        [{ text: 'OK', onPress: () => navigation.goBack() }]
-                                    );
-                                } catch (botijasError) {
-                                    console.error('Erro ao registrar botijas:', botijasError);
-                                    Alert.alert(
-                                        'Atenção',
-                                        'Entrega confirmada, mas houve erro ao registrar botijas vazias.',
-                                        [{ text: 'OK', onPress: () => navigation.goBack() }]
-                                    );
-                                }
-                            } else {
-                                Alert.alert(
-                                    'Sucesso',
-                                    'Entrega confirmada com sucesso!',
-                                    [{ text: 'OK', onPress: () => navigation.goBack() }]
-                                );
-                            }
-                        } catch (error: any) {
-                            console.error('Erro ao confirmar entrega:', error);
-
-                            let errorMessage = 'Erro ao confirmar entrega';
-                            if (error.response?.data) {
-                                errorMessage = error.response.data;
-                            }
-
-                            Alert.alert('Erro', errorMessage);
-                        } finally {
-                            setConfirmingDelivery(false);
-                        }
-                    },
-                },
-            ]
-        );
-    };
-
-    // Confirmar entrega COM cascos selecionados
-    const confirmarComCascosSelecionados = async (cascosSelecionados: number[]) => {
-        if (!pedido) return;
-
-        console.log('=== CONFIRMANDO COM CASCOS SELECIONADOS ===');
-        console.log('Cascos:', cascosSelecionados);
-
-        setMostrarModalCascos(false);
         setConfirmingDelivery(true);
 
         try {
+            // 1. Verificar se há produtos com retorno de botija
+            const produtosRetornaveis = pedido.itens.filter(item =>
+                item.retorna_botija &&
+                (item.categoria === 'botija_gas' || item.categoria === 'agua')
+            );
+
+            console.log('Produtos retornáveis:', produtosRetornaveis);
+
+            if (produtosRetornaveis.length === 0) {
+                // Não há produtos retornáveis, confirmar direto
+                await confirmarSemCascos();
+                return;
+            }
+
+            // 2. Buscar cascos disponíveis para cada produto
+            const cascosMap = await gruposService.buscarCascosDisponiveis(produtosRetornaveis);
+            console.log('Cascos disponíveis:', cascosMap);
+
+            // 3. Verificar se todos os produtos têm apenas 1 casco
+            let todosTemUmCasco = true;
+            // MUDAR O TIPO AQUI - usar string como chave
+            const cascosAutomaticos: { [key: string]: Array<{ casco_id: number, quantidade: number }> } = {};
+
+            for (const produto of produtosRetornaveis) {
+                if (!produto.produto_id) continue;
+
+                const cascosDesteProduto = cascosMap[produto.produto_id] || [];
+
+                if (cascosDesteProduto.length === 0) {
+                    console.log(`Produto ${produto.nome_produto} sem cascos disponíveis`);
+                    todosTemUmCasco = false;
+                    break;
+                } else if (cascosDesteProduto.length === 1) {
+                    // Atribuir automaticamente - USAR STRING como chave
+                    cascosAutomaticos[produto.produto_id.toString()] = [{
+                        casco_id: cascosDesteProduto[0].id,
+                        quantidade: produto.quantidade || 0
+                    }];
+                    console.log(`Produto ${produto.nome_produto} tem apenas 1 casco - seleção automática`);
+                } else {
+                    console.log(`Produto ${produto.nome_produto} tem ${cascosDesteProduto.length} cascos - requer seleção manual`);
+                    todosTemUmCasco = false;
+                    break;
+                }
+            }
+
+            // 4. Decidir fluxo
+            if (todosTemUmCasco && Object.keys(cascosAutomaticos).length === produtosRetornaveis.length) {
+                // Confirmar automaticamente com cascos selecionados
+                console.log('Confirmando automaticamente com cascos:', cascosAutomaticos);
+                await confirmarComCascos(cascosAutomaticos);
+            } else {
+                // Abrir modal para seleção manual
+                console.log('Abrindo modal para seleção manual');
+                setProdutosComRetorno(produtosRetornaveis);
+                setCascosDisponiveis(cascosMap);
+
+                // Inicializar quantidades zeradas
+                const quantidadesIniciais: { [key: number]: { [casco_id: number]: number } } = {};
+                for (const produto of produtosRetornaveis) {
+                    if (produto.produto_id) {
+                        quantidadesIniciais[produto.produto_id] = {};
+                        const cascos = cascosMap[produto.produto_id] || [];
+                        cascos.forEach(casco => {
+                            quantidadesIniciais[produto.produto_id!][casco.id] = 0;
+                        });
+                    }
+                }
+                setQuantidadesPorCasco(quantidadesIniciais);
+
+                setConfirmingDelivery(false);
+                setCascoDialogOpen(true);
+            }
+        } catch (error) {
+            console.error('Erro ao processar confirmação:', error);
+            Alert.alert('Erro', 'Erro ao processar confirmação de entrega');
+            setConfirmingDelivery(false);
+        }
+    };
+
+    const confirmarSemCascos = async () => {
+        try {
             await pedidosService.confirmarEntrega({
-                pedido_id: pedido.id,
-                cascos: cascosSelecionados,
+                pedido_id: pedido!.id,
             });
 
             Alert.alert(
                 'Sucesso',
-                'Entrega confirmada com os cascos selecionados!',
+                'Entrega confirmada com sucesso!',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error: any) {
-            console.error('Erro ao confirmar entrega com cascos:', error);
-
-            let errorMessage = 'Erro ao confirmar entrega';
-            if (error.response?.data) {
-                errorMessage = typeof error.response.data === 'string'
-                    ? error.response.data
-                    : error.response.data.message || errorMessage;
-            }
-
-            Alert.alert('Erro', errorMessage);
+            console.error('Erro ao confirmar:', error);
+            Alert.alert('Erro', error.response?.data || 'Erro ao confirmar entrega');
         } finally {
             setConfirmingDelivery(false);
         }
     };
 
-    const verificarGruposRetornaveis = async () => {
-        if (!pedido) return false;
-
-        console.log('=== VERIFICANDO GRUPOS RETORNÁVEIS ===');
-        setVerificandoGrupos(true);
-
+    // CORRIGIR FUNÇÃO confirmarComCascos - MUDAR TIPO DO PARÂMETRO
+    const confirmarComCascos = async (cascos: { [key: string]: Array<{ casco_id: number, quantidade: number }> }) => {
         try {
-            const grupos = await gruposService.obterGruposDoPedido(pedido.id);
-            console.log('Grupos com retorno encontrados:', grupos.size);
+            await pedidosService.confirmarEntrega({
+                pedido_id: pedido!.id,
+                cascos: cascos,
+            });
 
-            setGruposComRetorno(grupos);
-            return grupos.size > 0;
-        } catch (error) {
-            console.error('Erro ao verificar grupos:', error);
-            return false;
+            Alert.alert(
+                'Sucesso',
+                'Entrega confirmada e cascos registrados com sucesso!',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+        } catch (error: any) {
+            console.error('Erro ao confirmar com cascos:', error);
+            Alert.alert('Erro', error.response?.data || 'Erro ao confirmar entrega');
         } finally {
-            setVerificandoGrupos(false);
+            setConfirmingDelivery(false);
         }
+    };
+
+    const handleQuantidadeCascoChange = (produtoId: number, cascoId: number, novaQuantidade: number) => {
+        setQuantidadesPorCasco(prev => ({
+            ...prev,
+            [produtoId]: {
+                ...prev[produtoId],
+                [cascoId]: Math.max(0, novaQuantidade)
+            }
+        }));
+    };
+
+    const verificarSelecaoCompleta = () => {
+        for (const produto of produtosComRetorno) {
+            if (!produto.produto_id) continue;
+            const quantidadesDesteProduto = quantidadesPorCasco[produto.produto_id] || {};
+            const totalSelecionado = Object.values(quantidadesDesteProduto).reduce((sum, qty) => sum + qty, 0);
+
+            if (totalSelecionado !== (produto.quantidade || 0)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    // CORRIGIR FUNÇÃO confirmarEntregaComCascosModal
+    const confirmarEntregaComCascosModal = async () => {
+        if (!verificarSelecaoCompleta()) {
+            Alert.alert('Atenção', 'Complete a seleção de cascos para todos os produtos');
+            return;
+        }
+
+        // Preparar dados - USAR STRING como chave
+        const cascos: { [key: string]: Array<{ casco_id: number, quantidade: number }> } = {};
+
+        for (const produto of produtosComRetorno) {
+            if (!produto.produto_id) continue;
+            const quantidadesDesteProduto = quantidadesPorCasco[produto.produto_id] || {};
+            const cascosComQuantidade: Array<{ casco_id: number, quantidade: number }> = [];
+
+            Object.entries(quantidadesDesteProduto).forEach(([cascoIdStr, quantidade]) => {
+                if (quantidade > 0) {
+                    cascosComQuantidade.push({
+                        casco_id: parseInt(cascoIdStr),
+                        quantidade: quantidade
+                    });
+                }
+            });
+
+            if (cascosComQuantidade.length > 0) {
+                // USAR STRING como chave
+                cascos[produto.produto_id.toString()] = cascosComQuantidade;
+            }
+        }
+
+        setCascoDialogOpen(false);
+        setConfirmingDelivery(true);
+
+        await confirmarComCascos(cascos);
     };
 
     const getStatusColor = (status: string): string => {
@@ -395,7 +410,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                     </View>
                     <Text style={styles.enderecoText}>{pedido.endereco_entrega}</Text>
 
-                    {/* Botão de Navegação */}
                     <TouchableOpacity
                         style={styles.navegacaoButton}
                         onPress={abrirNavegacao}
@@ -480,13 +494,90 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                 <View style={{ height: 20 }} />
             </ScrollView>
-            <SelecionarCascosModal
-                visible={mostrarModalCascos}
-                pedidoId={pedido?.id || 0}
-                gruposComRetorno={gruposComRetorno}
-                onConfirm={confirmarComCascosSelecionados}
-                onCancel={() => setMostrarModalCascos(false)}
-            />
+
+            <Modal
+                visible={cascoDialogOpen}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setCascoDialogOpen(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Selecionar Cascos Devolvidos</Text>
+                            <TouchableOpacity onPress={() => setCascoDialogOpen(false)}>
+                                <Ionicons name="close" size={24} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.modalContent}>
+                            <Text style={styles.modalSubtitle}>
+                                Especifique a quantidade de cada tipo de casco devolvido:
+                            </Text>
+
+                            {produtosComRetorno.map((produto) => {
+                                if (!produto.produto_id) return null;
+
+                                const cascosDesteProduto = cascosDisponiveis[produto.produto_id] || [];
+                                const quantidadesDesteProduto = quantidadesPorCasco[produto.produto_id] || {};
+                                const totalSelecionado = Object.values(quantidadesDesteProduto).reduce((sum, qty) => sum + qty, 0);
+
+                                return (
+                                    <View key={produto.produto_id} style={styles.produtoCard}>
+                                        <Text style={styles.produtoNome}>{produto.nome_produto}</Text>
+                                        <Text style={styles.produtoInfo}>
+                                            Quantidade: {produto.quantidade} | Selecionado: {totalSelecionado}/{produto.quantidade}
+                                        </Text>
+
+                                        {cascosDesteProduto.length === 0 ? (
+                                            <Text style={styles.errorText}>Nenhum casco disponível</Text>
+                                        ) : (
+                                            cascosDesteProduto.map((casco) => (
+                                                <View key={casco.id} style={styles.cascoItem}>
+                                                    <Text style={styles.cascoNome}>{casco.nome}</Text>
+                                                    <TextInput
+                                                        style={styles.quantityInput}
+                                                        keyboardType="numeric"
+                                                        value={String(quantidadesDesteProduto[casco.id] || 0)}
+                                                        onChangeText={(text) => {
+                                                            const novaQtd = parseInt(text) || 0;
+                                                            handleQuantidadeCascoChange(produto.produto_id!, casco.id, novaQtd);
+                                                        }}
+                                                    />
+                                                </View>
+                                            ))
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setCascoDialogOpen(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalButton,
+                                    styles.confirmButton,
+                                    !verificarSelecaoCompleta() && styles.buttonDisabled
+                                ]}
+                                onPress={confirmarEntregaComCascosModal}
+                                disabled={!verificarSelecaoCompleta() || confirmingDelivery}
+                            >
+                                {confirmingDelivery ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.confirmButtonText}>Confirmar Entrega</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -744,5 +835,106 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         marginLeft: 8,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContainer: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '80%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    modalContent: {
+        padding: 16,
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 16,
+    },
+    produtoCard: {
+        backgroundColor: '#f9f9f9',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 12,
+    },
+    produtoNome: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    produtoInfo: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 12,
+    },
+    cascoItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    cascoNome: {
+        flex: 1,
+        fontSize: 14,
+    },
+    quantityInput: {
+        width: 60,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 4,
+        padding: 8,
+        textAlign: 'center',
+    },
+    modalFooter: {
+        flexDirection: 'row',
+        padding: 16,
+        gap: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+    },
+    modalButton: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ccc',
+    },
+    cancelButtonText: {
+        color: '#666',
+        fontWeight: '600',
+    },
+    confirmButton: {
+        backgroundColor: '#4caf50',
+    },
+    confirmButtonText: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    buttonDisabled: {
+        opacity: 0.5,
     },
 });

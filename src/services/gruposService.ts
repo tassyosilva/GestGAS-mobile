@@ -1,4 +1,6 @@
 import { api } from './apiService';
+import { API_ENDPOINTS } from '../config/api';
+import { ItemPedido } from '../types';
 
 export interface GrupoBotija {
     id: number;
@@ -15,74 +17,103 @@ export interface ProdutoComGrupo {
 }
 
 class GruposService {
-    async listarGrupos(): Promise<GrupoBotija[]> {
+    /**
+     * Busca cascos disponíveis para um produto específico através do seu grupo
+     */
+    async buscarCascosParaProduto(produtoId: number): Promise<any[]> {
         try {
-            const response = await api.get<GrupoBotija[]>('/grupos-botijas');
-            return response.data;
-        } catch (error) {
-            console.error('Erro ao listar grupos:', error);
-            return [];
-        }
-    }
+            console.log(`🔍 Buscando cascos para produto ${produtoId}`);
 
-    async listarProdutosPorGrupo(grupoId: number): Promise<ProdutoComGrupo[]> {
-        try {
-            const response = await api.get<ProdutoComGrupo[]>(`/grupos-botijas/${grupoId}/produtos`);
-            return response.data;
-        } catch (error) {
-            console.error('Erro ao listar produtos do grupo:', error);
-            return [];
-        }
-    }
+            // 1. Buscar todos os grupos
+            console.log('🌐 Chamando endpoint:', API_ENDPOINTS.GRUPOS_BOTIJAS);
+            const gruposResponse = await api.get(API_ENDPOINTS.GRUPOS_BOTIJAS);
 
-    async obterGruposDoPedido(pedidoId: number): Promise<Map<number, ProdutoComGrupo[]>> {
-        try {
-            // Buscar detalhes do pedido
-            const pedidoResponse = await api.get(`/pedidos/${pedidoId}`);
-            const pedido = pedidoResponse.data;
+            console.log('📦 Resposta dos grupos:', gruposResponse.data);
 
-            if (!pedido || !pedido.itens) {
-                return new Map();
+            const grupos = gruposResponse.data;
+
+            if (!Array.isArray(grupos)) {
+                console.error('❌ Resposta não é um array:', typeof grupos);
+                return [];
             }
 
-            // Agrupar produtos que têm retorno de botija
-            const gruposMap = new Map<number, ProdutoComGrupo[]>();
+            console.log(`📦 Total de grupos encontrados: ${grupos.length}`);
 
-            for (const item of pedido.itens) {
-                if (!item.retorna_botija) continue;
-
-                // Buscar se o produto pertence a um grupo
+            // 2. Para cada grupo, verificar se contém este produto
+            for (const grupo of grupos) {
                 try {
-                    const response = await api.get<ProdutoComGrupo[]>('/produtos-grupos', {
-                        params: { produto_id: item.produto_id },
-                    });
+                    console.log(`🔎 Verificando grupo ${grupo.id} - ${grupo.nome}`);
 
-                    if (response.data && response.data.length > 0) {
-                        const produtoGrupo = response.data[0];
-                        const grupoId = produtoGrupo.grupo_id;
+                    const detalhesGrupo = await api.get(API_ENDPOINTS.GRUPO_DETALHES(grupo.id));
 
-                        if (!gruposMap.has(grupoId)) {
-                            gruposMap.set(grupoId, []);
-                        }
+                    console.log(`📋 Detalhes do grupo ${grupo.id}:`, JSON.stringify(detalhesGrupo.data, null, 2));
 
-                        gruposMap.get(grupoId)!.push({
-                            produto_id: item.produto_id,
-                            produto_nome: item.nome_produto,
-                            grupo_id: grupoId,
-                            grupo_nome: produtoGrupo.grupo_nome,
-                            categoria: produtoGrupo.categoria || 'botija_gas',
+                    if (detalhesGrupo.data && detalhesGrupo.data.produtos) {
+                        console.log(`✅ Grupo ${grupo.id} tem ${detalhesGrupo.data.produtos.length} produtos`);
+
+                        // Verificar os diferentes formatos possíveis de ID
+                        const produtoNoGrupo = detalhesGrupo.data.produtos.find((p: any) => {
+                            const pId = p.id || p.produto_id;
+                            console.log(`  Comparando: produto do grupo ID=${pId} com produto procurado ID=${produtoId}`);
+                            return pId === produtoId;
                         });
+
+                        if (produtoNoGrupo) {
+                            // Produto encontrado neste grupo, buscar cascos
+                            console.log(`✅ Produto ${produtoId} encontrado no grupo ${grupo.id}`);
+
+                            try {
+                                const cascosResponse = await api.get(API_ENDPOINTS.GRUPO_CASCOS(grupo.id));
+                                const cascos = cascosResponse.data || [];
+                                console.log(`🎯 Cascos encontrados para grupo ${grupo.id}:`, JSON.stringify(cascos, null, 2));
+                                return cascos;
+                            } catch (error) {
+                                console.error(`❌ Erro ao buscar cascos do grupo ${grupo.id}:`, error);
+                                return [];
+                            }
+                        } else {
+                            console.log(`❌ Produto ${produtoId} NÃO está no grupo ${grupo.id}`);
+                        }
+                    } else {
+                        console.log(`⚠️ Grupo ${grupo.id} não tem produtos ou estrutura inválida`);
                     }
                 } catch (error) {
-                    console.log(`Produto ${item.produto_id} não pertence a nenhum grupo`);
+                    console.error(`❌ Erro ao buscar detalhes do grupo ${grupo.id}:`, error);
+                    continue;
                 }
             }
 
-            return gruposMap;
+            // Produto não encontrado em nenhum grupo
+            console.log(`❌ Produto ${produtoId} não pertence a nenhum grupo`);
+            return [];
         } catch (error) {
-            console.error('Erro ao obter grupos do pedido:', error);
-            return new Map();
+            console.error(`❌ Erro ao buscar cascos para produto ${produtoId}:`, error);
+            return [];
         }
+    }
+
+    /**
+     * Busca cascos disponíveis para múltiplos produtos
+     */
+    async buscarCascosDisponiveis(produtos: ItemPedido[]): Promise<{ [key: number]: any[] }> {
+        console.log(`🚀 Iniciando busca de cascos para ${produtos.length} produtos`);
+        const cascosMap: { [key: number]: any[] } = {};
+
+        for (const produto of produtos) {
+            if (produto.produto_id) {
+                console.log(`\n--- Processando produto ${produto.produto_id} - ${produto.nome_produto} ---`);
+                const cascos = await this.buscarCascosParaProduto(produto.produto_id);
+                cascosMap[produto.produto_id] = cascos;
+                console.log(`✅ Resultado: ${cascos.length} cascos encontrados para produto ${produto.produto_id}`);
+            }
+        }
+
+        console.log('\n📊 Resumo final de cascos:');
+        Object.entries(cascosMap).forEach(([produtoId, cascos]) => {
+            console.log(`  Produto ${produtoId}: ${cascos.length} cascos`);
+        });
+
+        return cascosMap;
     }
 }
 
