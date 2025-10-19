@@ -62,6 +62,18 @@ class PedidosService {
         }
     }
 
+    async listarPedidosFinalizados(params: ListarPedidosParams): Promise<ListarPedidosResponse> {
+        try {
+            const response = await api.get<ListarPedidosResponse>(API_ENDPOINTS.PEDIDOS_FINALIZADOS, {
+                params,
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Erro ao listar pedidos finalizados:', error);
+            throw error;
+        }
+    }
+
     // NOVO: Buscar cascos disponíveis do grupo
     async buscarCascosDoGrupo(grupoId: number): Promise<any[]> {
         try {

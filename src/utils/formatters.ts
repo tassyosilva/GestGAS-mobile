@@ -25,3 +25,36 @@ export const formatTime = (dateString: string): string => {
         minute: '2-digit',
     }).format(date);
 };
+
+export const calcularTempoEntrega = (dataAtribuicao?: string, dataEntrega?: string): string => {
+    if (!dataAtribuicao || !dataEntrega) return '-';
+
+    const inicio = new Date(dataAtribuicao);
+    const fim = new Date(dataEntrega);
+
+    const diffMs = fim.getTime() - inicio.getTime();
+    const diffMinutos = Math.floor(diffMs / (1000 * 60));
+
+    if (diffMinutos < 60) {
+        return `${diffMinutos} min`;
+    } else {
+        const horas = Math.floor(diffMinutos / 60);
+        const minutos = diffMinutos % 60;
+        if (minutos === 0) {
+            return `${horas}h`;
+        } else {
+            return `${horas}h ${minutos}min`;
+        }
+    }
+};
+
+export const formatShortDate = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
+};

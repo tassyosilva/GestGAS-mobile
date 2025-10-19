@@ -54,7 +54,6 @@ export interface AppConfig {
     user: Usuario | null;
 }
 
-// Tipos para Grupos e Cascos
 export interface GrupoBotija {
     id: number;
     nome: string;
@@ -81,7 +80,7 @@ export interface CascoDisponivel {
 
 export interface ConfirmarEntregaRequest {
     pedido_id: number;
-    cascos?: CascoSelecionado; // MANTER ASSIM
+    cascos?: CascoSelecionado;
 }
 
 export interface CascoSelecionado {
@@ -91,4 +90,17 @@ export interface CascoSelecionado {
 export interface CascoQuantidade {
     casco_id: number;
     quantidade: number;
+}
+
+export interface PedidoResolvido {
+    id: number;
+    data_entregador_atribuido?: string;
+    data_entrega?: string;
+    endereco_entrega: string;
+    valor_total: number;
+    cliente_nome: string;
+    status: string;
+    bairro?: string;
+    tempo_entrega?: string;
+    forma_pagamento?: string;
 }

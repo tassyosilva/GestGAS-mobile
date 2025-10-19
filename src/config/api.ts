@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
     GRUPOS_BOTIJAS: '/api/grupos-botijas',
     GRUPO_DETALHES: (id: number) => `/api/grupos-botijas/${id}`,
     GRUPO_CASCOS: (id: number) => `/api/grupos-botijas/cascos/${id}`,
+    PEDIDOS_FINALIZADOS: '/api/pedidos/finalizados',
 
     // Adicionar endpoint de geocoding (OpenStreetMap Nominatim)
     GEOCODE: (address: string) =>
