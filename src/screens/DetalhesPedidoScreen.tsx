@@ -273,14 +273,44 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         }
     };
 
-    const handleQuantidadeCascoChange = (produtoId: number, cascoId: number, novaQuantidade: number) => {
-        setQuantidadesPorCasco(prev => ({
-            ...prev,
-            [produtoId]: {
-                ...prev[produtoId],
-                [cascoId]: Math.max(0, novaQuantidade)
+    const handleIncrementoCasco = (produto: ItemPedido, cascoId: number, delta: number) => {
+        if (!produto.produto_id) return;
+
+        const produtoId = produto.produto_id;
+        const quantidadeRequerida = produto.quantidade || 0;
+
+        setQuantidadesPorCasco(prev => {
+            const quantidadesAtuais = { ...prev };
+            const quantidadesProdutoAtual = { ...(quantidadesAtuais[produtoId] || {}) };
+            const quantidadeCascoAtual = quantidadesProdutoAtual[cascoId] || 0;
+
+            // Calcula o total já selecionado para este produto, excluindo o casco atual
+            let totalSelecionadoAtual = 0;
+            for (const id in quantidadesProdutoAtual) {
+                if (parseInt(id) !== cascoId) {
+                    totalSelecionadoAtual += quantidadesProdutoAtual[id];
+                }
             }
-        }));
+
+            // Calcula a nova quantidade para o casco que está sendo alterado
+            let novaQuantidadeCasco = quantidadeCascoAtual + delta;
+
+            // Garante que não seja menor que 0
+            if (novaQuantidadeCasco < 0) {
+                novaQuantidadeCasco = 0;
+            }
+
+            // Garante que a soma não ultrapasse o total requerido
+            if (totalSelecionadoAtual + novaQuantidadeCasco > quantidadeRequerida) {
+                // Se tentou incrementar além do limite, apenas retorna o estado anterior
+                return prev;
+            }
+
+            quantidadesProdutoAtual[cascoId] = novaQuantidadeCasco;
+            quantidadesAtuais[produtoId] = quantidadesProdutoAtual;
+
+            return quantidadesAtuais;
+        });
     };
 
     const verificarSelecaoCompleta = () => {
@@ -512,7 +542,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                         <ScrollView style={styles.modalContent}>
                             <Text style={styles.modalSubtitle}>
-                                Especifique a quantidade de cada tipo de casco devolvido:
+                                Especifique a quantidade de cada tipo de casco devolvido pelo cliente:
                             </Text>
 
                             {produtosComRetorno.map((produto) => {
@@ -532,20 +562,36 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                                         {cascosDesteProduto.length === 0 ? (
                                             <Text style={styles.errorText}>Nenhum casco disponível</Text>
                                         ) : (
-                                            cascosDesteProduto.map((casco) => (
-                                                <View key={casco.id} style={styles.cascoItem}>
-                                                    <Text style={styles.cascoNome}>{casco.nome}</Text>
-                                                    <TextInput
-                                                        style={styles.quantityInput}
-                                                        keyboardType="numeric"
-                                                        value={String(quantidadesDesteProduto[casco.id] || 0)}
-                                                        onChangeText={(text) => {
-                                                            const novaQtd = parseInt(text) || 0;
-                                                            handleQuantidadeCascoChange(produto.produto_id!, casco.id, novaQtd);
-                                                        }}
-                                                    />
-                                                </View>
-                                            ))
+                                            cascosDesteProduto.map((casco) => {
+                                                const quantidadeAtual = quantidadesDesteProduto[casco.id] || 0;
+                                                const desabilitarMais = totalSelecionado >= (produto.quantidade || 0);
+                                                const desabilitarMenos = quantidadeAtual === 0;
+
+                                                return (
+                                                    <View key={casco.id} style={styles.cascoItem}>
+                                                        <Text style={styles.cascoNome}>{casco.nome}</Text>
+                                                        <View style={styles.quantitySelector}>
+                                                            <TouchableOpacity
+                                                                style={[styles.quantityButton, desabilitarMenos && styles.quantityButtonDisabled]}
+                                                                onPress={() => handleIncrementoCasco(produto, casco.id, -1)}
+                                                                disabled={desabilitarMenos}
+                                                            >
+                                                                <Ionicons name="remove" size={20} color="#1976d2" />
+                                                            </TouchableOpacity>
+
+                                                            <Text style={styles.quantityValue}>{quantidadeAtual}</Text>
+
+                                                            <TouchableOpacity
+                                                                style={[styles.quantityButton, desabilitarMais && styles.quantityButtonDisabled]}
+                                                                onPress={() => handleIncrementoCasco(produto, casco.id, 1)}
+                                                                disabled={desabilitarMais}
+                                                            >
+                                                                <Ionicons name="add" size={20} color="#1976d2" />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })
                                         )}
                                     </View>
                                 );
@@ -936,5 +982,30 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: {
         opacity: 0.5,
+    },
+    quantitySelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    quantityButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#e3f2fd',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginHorizontal: 8,
+    },
+    quantityButtonDisabled: {
+        backgroundColor: '#f5f5f5',
+        opacity: 0.5,
+    },
+    quantityValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        minWidth: 30,
+        textAlign: 'center',
     },
 });
