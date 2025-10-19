@@ -41,9 +41,11 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         loadUser();
     }, []);
 
+    // ATUALIZADO: Este useEffect agora carrega os dados iniciais
     useEffect(() => {
         if (user) {
             loadPedidos();
+            loadTotalFinalizados(); // ADICIONADO: Carrega o total ao iniciar
         }
     }, [user, page]);
 
@@ -51,7 +53,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         if (user && pageFinalizados > 0) {
             loadPedidosFinalizados();
         }
-    }, [pageFinalizados]); // Depende apenas da MUDANÇA da página.
+    }, [pageFinalizados]);
 
     const loadUser = async () => {
         try {
@@ -63,18 +65,32 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
     };
 
+    // NOVO: Função leve para buscar apenas o total de finalizados
+    const loadTotalFinalizados = async () => {
+        if (!user) return;
+        try {
+            const response = await pedidosService.listarPedidosFinalizados({
+                entregador_id: user.id,
+                page: 1,
+                limit: 1, // Pede apenas 1 item para ser uma chamada rápida
+            });
+            if (response && typeof response.total === 'number') {
+                setTotalFinalizados(response.total);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar total de finalizados:', error);
+        }
+    };
+
     const loadPedidos = async () => {
         if (!user) return;
-
         try {
             if (page === 0) setLoading(true);
-
             const response = await pedidosService.listarPedidosEntregador({
                 entregador_id: user.id,
                 page: page + 1,
                 limit,
             });
-
             if (response && response.pedidos) {
                 setPedidos(response.pedidos);
                 setTotal(response.total || 0);
@@ -101,16 +117,13 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
     const loadPedidosFinalizados = async () => {
         if (!user || loadingFinalizados) return;
-
         try {
             setLoadingFinalizados(true);
-
             const response = await pedidosService.listarPedidosFinalizados({
                 entregador_id: user.id,
                 page: pageFinalizados + 1,
                 limit: limitFinalizados,
             });
-
             if (response && response.pedidos) {
                 const pedidosResolvidosData = response.pedidos.map((p: any) => ({
                     id: p.id,
@@ -123,13 +136,11 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                     bairro: p.bairro,
                     forma_pagamento: p.forma_pagamento,
                 }));
-
                 if (pageFinalizados === 0) {
                     setPedidosFinalizados(pedidosResolvidosData);
                 } else {
                     setPedidosFinalizados(prevPedidos => [...prevPedidos, ...pedidosResolvidosData]);
                 }
-
                 setTotalFinalizados(response.total || 0);
             } else if (pageFinalizados === 0) {
                 setPedidosFinalizados([]);
@@ -142,14 +153,16 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
     };
 
+    // ATUALIZADO: onRefresh agora também atualiza o total
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         setPage(0);
-        // Garantir que a atualização zere e recarregue ambos
         setPageFinalizados(0);
-        setPedidosFinalizados([]); // Limpa a lista para garantir uma recarga limpa
+        setPedidosFinalizados([]);
 
         loadPedidos();
+        loadTotalFinalizados(); // ADICIONADO: Atualiza o total ao arrastar
+
         if (showFinalizados) {
             loadPedidosFinalizados();
         }
@@ -187,15 +200,10 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
     };
 
-    // Centralizar a lógica de carregamento inicial aqui
     const toggleFinalizados = () => {
         const newState = !showFinalizados;
         setShowFinalizados(newState);
-
-        // Se estiver abrindo o painel E a lista estiver vazia, carrega a primeira página.
-        // Se a lista já tiver itens, apenas a exibe sem recarregar.
         if (newState && pedidosFinalizados.length === 0) {
-            // Garante que a paginação comece do zero antes de carregar
             if (pageFinalizados !== 0) {
                 setPageFinalizados(0);
             }
