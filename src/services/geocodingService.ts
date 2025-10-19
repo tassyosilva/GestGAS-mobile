@@ -1,143 +1,152 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface GeocodingResult {
-    lat: string;
-    lon: string;
-    display_name: string;
+export interface Coordenadas {
+    latitude: number;
+    longitude: number;
+}
+
+interface CacheEntry {
+    coords: Coordenadas;
+    timestamp: number;
 }
 
 class GeocodingService {
-    private async tryGeocode(address: string): Promise<GeocodingResult | null> {
+    private readonly NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
+    private readonly CACHE_KEY = '@geocoding_cache';
+    private readonly CACHE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 dias
+    private cache: Map<string, CacheEntry> = new Map();
+    private lastRequestTime = 0;
+    private readonly MIN_REQUEST_INTERVAL = 1100; // 1.1 segundos (margem de segurança)
+
+    constructor() {
+        this.loadCache();
+    }
+
+    private async loadCache() {
         try {
-            const encodedAddress = encodeURIComponent(address);
-            const url = `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1&countrycodes=br`;
+            const cacheData = await AsyncStorage.getItem(this.CACHE_KEY);
+            if (cacheData) {
+                const entries = JSON.parse(cacheData);
+                this.cache = new Map(Object.entries(entries));
+                console.log(`📦 Cache carregado: ${this.cache.size} endereços`);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar cache:', error);
+        }
+    }
 
-            console.log('  Tentando:', address);
+    private async saveCache() {
+        try {
+            const entries = Object.fromEntries(this.cache);
+            await AsyncStorage.setItem(this.CACHE_KEY, JSON.stringify(entries));
+        } catch (error) {
+            console.error('Erro ao salvar cache:', error);
+        }
+    }
 
-            const response = await axios.get<GeocodingResult[]>(url, {
-                timeout: 10000,
-                headers: {
-                    'User-Agent': 'GestGasEntregasApp/1.0',
-                    'Accept': 'application/json',
+    private getCacheKey(address: string): string {
+        return address.toLowerCase().trim().replace(/\s+/g, ' ');
+    }
+
+    private async waitForRateLimit() {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+
+        if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
+            const waitTime = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+            console.log(`⏳ Aguardando ${waitTime}ms para respeitar rate limit...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+
+        this.lastRequestTime = Date.now();
+    }
+
+    async geocodeAddress(address: string): Promise<Coordenadas | null> {
+        try {
+            console.log('🌍 Geocodificando endereço:', address);
+
+            // Verificar cache
+            const cacheKey = this.getCacheKey(address);
+            const cached = this.cache.get(cacheKey);
+
+            if (cached) {
+                const age = Date.now() - cached.timestamp;
+                if (age < this.CACHE_DURATION) {
+                    console.log('✅ Usando coordenadas do cache (idade:', Math.round(age / (24 * 60 * 60 * 1000)), 'dias)');
+                    return cached.coords;
+                } else {
+                    console.log('⏰ Cache expirado, buscando novamente...');
+                    this.cache.delete(cacheKey);
+                }
+            }
+
+            // Respeitar rate limit
+            await this.waitForRateLimit();
+
+            console.log('🌐 Fazendo requisição ao Nominatim...');
+            const response = await axios.get(`${this.NOMINATIM_BASE_URL}/search`, {
+                params: {
+                    q: address,
+                    format: 'json',
+                    limit: 1,
+                    addressdetails: 1,
                 },
+                headers: {
+                    'User-Agent': 'GestGAS-Mobile/1.0 (gestgas@example.com)', // MUDE PARA SEU EMAIL
+                },
+                timeout: 10000,
             });
 
             if (response.data && response.data.length > 0) {
-                console.log('  ✅ Sucesso! Local:', response.data[0].display_name);
-                return response.data[0];
+                const location = response.data[0];
+                console.log('✅ Coordenadas encontradas:', location);
+
+                const coords: Coordenadas = {
+                    latitude: parseFloat(location.lat),
+                    longitude: parseFloat(location.lon),
+                };
+
+                // Salvar no cache
+                this.cache.set(cacheKey, {
+                    coords,
+                    timestamp: Date.now(),
+                });
+
+                // Salvar cache em disco (não bloquear)
+                this.saveCache().catch(err => console.error('Erro ao salvar cache:', err));
+
+                return coords;
             }
 
-            console.log('  ❌ Nenhum resultado');
+            console.log('❌ Nenhuma coordenada encontrada para o endereço');
             return null;
-        } catch (error) {
-            console.log('  ❌ Erro na requisição');
-            return null;
-        }
-    }
-
-    private extractAddressVariations(fullAddress: string): string[] {
-        console.log('Extraindo variações do endereço...');
-
-        const variations: string[] = [];
-
-        // Limpar o endereço
-        let cleaned = fullAddress
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toUpperCase();
-
-        // Extrair componentes usando regex
-        const ruaMatch = cleaned.match(/RUA\s+([^,]+)/i);
-        const numeroMatch = cleaned.match(/,\s*(\d+)/);
-        const bairroMatch = cleaned.match(/BAIRRO\s+([^,]+)/i);
-        const cepMatch = cleaned.match(/CEP\s*([\d-]+)/i);
-        const cidadeMatch = cleaned.match(/BOA\s+VISTA|RORAIMA|RR/i);
-
-        const rua = ruaMatch ? ruaMatch[1].trim() : '';
-        const numero = numeroMatch ? numeroMatch[1].trim() : '';
-        const bairro = bairroMatch ? bairroMatch[1].trim() : '';
-        const cep = cepMatch ? cepMatch[1].trim() : '';
-
-        console.log('Componentes extraídos:', { rua, numero, bairro, cep });
-
-        // Estratégia 1: Endereço completo original
-        variations.push(fullAddress);
-
-        // Estratégia 2: Rua + Número + Boa Vista RR
-        if (rua && numero) {
-            variations.push(`${rua}, ${numero}, Boa Vista, Roraima, Brasil`);
-            variations.push(`${rua} ${numero}, Boa Vista RR Brasil`);
-        }
-
-        // Estratégia 3: Rua + Bairro + Boa Vista
-        if (rua && bairro) {
-            variations.push(`${rua}, ${bairro}, Boa Vista, Roraima`);
-        }
-
-        // Estratégia 4: Apenas Rua + Boa Vista
-        if (rua) {
-            variations.push(`${rua}, Boa Vista, RR, Brasil`);
-            variations.push(`${rua}, Boa Vista, Roraima`);
-        }
-
-        // Estratégia 5: Bairro + Boa Vista (para ter pelo menos a região)
-        if (bairro) {
-            variations.push(`${bairro}, Boa Vista, Roraima, Brasil`);
-        }
-
-        // Estratégia 6: CEP (se disponível)
-        if (cep) {
-            variations.push(cep);
-        }
-
-        // Estratégia 7: Apenas a cidade como último recurso
-        variations.push('Boa Vista, Roraima, Brasil');
-
-        // Remover duplicatas
-        const unique = [...new Set(variations)];
-
-        console.log(`Total de ${unique.length} variações para tentar`);
-        return unique;
-    }
-
-    async geocodeAddress(address: string): Promise<{ latitude: number; longitude: number } | null> {
-        console.log('=== INICIANDO GEOCODING ===');
-        console.log('Endereço recebido:', address);
-
-        try {
-            const variations = this.extractAddressVariations(address);
-
-            // Tentar cada variação em ordem
-            for (let i = 0; i < variations.length; i++) {
-                console.log(`\nTentativa ${i + 1}/${variations.length}:`);
-
-                const result = await this.tryGeocode(variations[i]);
-
-                if (result) {
-                    const coords = {
-                        latitude: parseFloat(result.lat),
-                        longitude: parseFloat(result.lon),
-                    };
-
-                    console.log('\n✅ COORDENADAS ENCONTRADAS:', coords);
-                    console.log('Local completo:', result.display_name);
-
-                    return coords;
-                }
-
-                // Pequeno delay entre requisições para não sobrecarregar a API
-                if (i < variations.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-            }
-
-            console.log('\n❌ NENHUMA VARIAÇÃO RETORNOU RESULTADO');
-            return null;
-
         } catch (error: any) {
-            console.error('=== ERRO NO GEOCODING ===');
-            console.error('Mensagem:', error.message);
+            console.error('❌ Erro ao geocodificar endereço:', error);
+
+            if (error.response?.status === 429) {
+                console.error('🚫 Rate limit excedido! Aguarde antes de fazer novas requisições.');
+            }
+
             return null;
+        }
+    }
+
+    // Método para limpar cache antigo
+    async clearOldCache() {
+        const now = Date.now();
+        let removed = 0;
+
+        for (const [key, entry] of this.cache.entries()) {
+            if (now - entry.timestamp > this.CACHE_DURATION) {
+                this.cache.delete(key);
+                removed++;
+            }
+        }
+
+        if (removed > 0) {
+            console.log(`🗑️ Removidos ${removed} itens antigos do cache`);
+            await this.saveCache();
         }
     }
 }

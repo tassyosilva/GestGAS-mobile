@@ -135,7 +135,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             if (coords) {
                 setLocation(coords);
             } else {
-                setGeocodeError('Não foi possível localizar o endereço no mapa. Tente adicionar mais detalhes como cidade e estado.');
+                setGeocodeError('Mapa indisponível para este endereço. Abra a navegação para visualizar.');
             }
         } catch (error) {
             console.error('❌ Erro capturado no geocodeAddress:', error);
