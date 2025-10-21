@@ -42,10 +42,14 @@ export interface Pedido {
     endereco_entrega: string;
     criado_em: string;
     itens?: ItemPedido[];
+    forma_pagamento?: string;
+    pagamento_realizado?: boolean;
 }
 
 export interface PedidoDetalhes extends Pedido {
     itens: ItemPedido[];
+    forma_pagamento?: string;
+    pagamento_realizado?: boolean;
 }
 
 export interface AppConfig {

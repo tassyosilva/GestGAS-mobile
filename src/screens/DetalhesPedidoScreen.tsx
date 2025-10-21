@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { pedidosService } from '../services/pedidoService';
 import { geocodingService } from '../services/geocodingService';
 import { PedidoDetalhes, ItemPedido } from '../types';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, calcularTempoEspera } from '../utils/formatters';
 import MapViewComponent from '../components/MapView';
 import * as Linking from 'expo-linking';
 import { gruposService } from '../services/gruposService';
@@ -431,6 +431,12 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                         <Ionicons name="call" size={18} color="#1976d2" />
                         <Text style={styles.telefoneText}>{pedido.cliente.telefone}</Text>
                     </TouchableOpacity>
+                    {pedido.status === 'em_entrega' && (
+                        <View style={styles.tempoEsperaContainer}>
+                            <Ionicons name="time" size={18} color="#ff9800" />
+                            <Text style={styles.tempoEsperaText}>{calcularTempoEspera(pedido.criado_em)}</Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.section}>
@@ -500,8 +506,24 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 </View>
 
                 <View style={styles.totalSection}>
-                    <Text style={styles.totalLabel}>Valor Total</Text>
-                    <Text style={styles.totalValue}>{formatCurrency(pedido.valor_total)}</Text>
+                    <View style={styles.totalContent}>
+                        <View style={styles.totalRow}>
+                            <Text style={styles.totalLabel}>Valor Total</Text>
+                            <Text style={styles.totalValue}>{formatCurrency(pedido.valor_total)}</Text>
+                        </View>
+                        <View style={[
+                            styles.statusPagamentoBadge,
+                            {
+                                backgroundColor: pedido.pagamento_realizado ? '#4caf50' : '#ff9800'
+                            }
+                        ]}>
+                            <Text style={styles.statusPagamentoText}>
+                                {pedido.pagamento_realizado
+                                    ? `Pago - ${pedido.forma_pagamento || 'N/A'}`
+                                    : 'Aguardando Pagamento'}
+                            </Text>
+                        </View>
+                    </View>
                 </View>
 
                 {canConfirmDelivery && (
@@ -819,14 +841,20 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         padding: 20,
         borderRadius: 12,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+    },
+    totalContent: {
+        flex: 1,
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
     },
     totalLabel: {
         fontSize: 18,
@@ -1009,5 +1037,32 @@ const styles = StyleSheet.create({
         color: '#333',
         minWidth: 30,
         textAlign: 'center',
+    },
+    tempoEsperaContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        marginTop: 4,
+        paddingHorizontal: 12,
+        backgroundColor: '#fff3e0',
+        borderRadius: 8,
+    },
+    tempoEsperaText: {
+        fontSize: 14,
+        color: '#ff9800',
+        marginLeft: 8,
+        fontWeight: '600',
+    },
+    statusPagamentoBadge: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        marginTop: 8,
+    },
+    statusPagamentoText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

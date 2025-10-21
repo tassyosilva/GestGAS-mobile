@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Pedido } from '../types';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, calcularTempoEspera } from '../utils/formatters';
 
 interface Props {
     pedido: Pedido;
@@ -29,9 +29,25 @@ const STATUS_LABELS: Record<string, string> = {
     'cancelado': 'Cancelado',
 };
 
+const getStatusPagamentoInfo = (pagamentoRealizado?: boolean, formaPagamento?: string) => {
+    if (pagamentoRealizado) {
+        return {
+            label: `Pago - ${formaPagamento || 'N/A'}`,
+            color: '#4caf50'
+        };
+    } else {
+        return {
+            label: 'Aguardando Pagamento',
+            color: '#ff9800'
+        };
+    }
+};
+
 export default function PedidoCard({ pedido, onPress }: Props) {
     const statusColor = STATUS_COLORS[pedido.status] || '#999';
     const statusLabel = STATUS_LABELS[pedido.status] || pedido.status;
+    const tempoEspera = calcularTempoEspera(pedido.criado_em);
+    const statusPagamento = getStatusPagamentoInfo(pedido.pagamento_realizado, pedido.forma_pagamento);
 
     return (
         <TouchableOpacity
@@ -42,9 +58,16 @@ export default function PedidoCard({ pedido, onPress }: Props) {
             <View style={styles.cardHeader}>
                 <View style={styles.clienteInfo}>
                     <Ionicons name="person-outline" size={18} color="#1976d2" />
-                    <Text style={styles.clienteNome} numberOfLines={1}>
-                        {pedido.cliente.nome}
-                    </Text>
+                    <View style={styles.clienteInfoTexto}>
+                        <Text style={styles.clienteNome} numberOfLines={1}>
+                            {pedido.cliente.nome}
+                        </Text>
+                        {pedido.status === 'em_entrega' && (
+                            <Text style={styles.tempoEspera} numberOfLines={1}>
+                                {tempoEspera}
+                            </Text>
+                        )}
+                    </View>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                     <Text style={styles.statusText}>{statusLabel}</Text>
@@ -72,8 +95,17 @@ export default function PedidoCard({ pedido, onPress }: Props) {
 
             <View style={styles.cardFooter}>
                 <View style={styles.valorContainer}>
-                    <Text style={styles.valorLabel}>Valor Total:</Text>
-                    <Text style={styles.valorText}>{formatCurrency(pedido.valor_total)}</Text>
+                    <View>
+                        <View style={styles.valorRow}>
+                            <Text style={styles.valorLabel}>Valor Total:</Text>
+                            <Text style={styles.valorText}>{formatCurrency(pedido.valor_total)}</Text>
+                        </View>
+                        <View style={styles.statusPagamentoContainer}>
+                            <View style={[styles.statusPagamentoBadge, { backgroundColor: statusPagamento.color }]}>
+                                <Text style={styles.statusPagamentoText}>{statusPagamento.label}</Text>
+                            </View>
+                        </View>
+                    </View>
                 </View>
                 <Ionicons name="chevron-forward" size={24} color="#1976d2" />
             </View>
@@ -157,5 +189,34 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#1976d2',
+    },
+    clienteInfoTexto: {
+        marginLeft: 6,
+        flex: 1,
+    },
+    tempoEspera: {
+        fontSize: 11,
+        color: '#ff9800',
+        marginTop: 2,
+        fontWeight: '600',
+    },
+    statusPagamentoContainer: {
+        marginTop: 6,
+    },
+    statusPagamentoBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+    },
+    statusPagamentoText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    valorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
 });

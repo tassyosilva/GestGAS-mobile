@@ -58,3 +58,27 @@ export const formatShortDate = (dateString: string): string => {
         minute: '2-digit',
     }).format(date);
 };
+
+export const calcularTempoEspera = (dataCriacao: string): string => {
+    if (!dataCriacao) return '-';
+
+    const agora = new Date();
+    const criacao = new Date(dataCriacao);
+
+    const diffMs = agora.getTime() - criacao.getTime();
+    const diffMinutos = Math.floor(diffMs / (1000 * 60));
+
+    if (diffMinutos < 1) {
+        return 'Agora';
+    } else if (diffMinutos < 60) {
+        return `Aguardando há ${diffMinutos} min`;
+    } else {
+        const horas = Math.floor(diffMinutos / 60);
+        const minutos = diffMinutos % 60;
+        if (minutos === 0) {
+            return `Aguardando há ${horas}h`;
+        } else {
+            return `Aguardando há ${horas}h ${minutos}min`;
+        }
+    }
+};
