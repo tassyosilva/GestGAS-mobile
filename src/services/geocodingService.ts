@@ -14,10 +14,10 @@ interface CacheEntry {
 class GeocodingService {
     private readonly NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
     private readonly CACHE_KEY = '@geocoding_cache';
-    private readonly CACHE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 dias
+    private readonly CACHE_DURATION = 30 * 24 * 60 * 60 * 1000;
     private cache: Map<string, CacheEntry> = new Map();
     private lastRequestTime = 0;
-    private readonly MIN_REQUEST_INTERVAL = 1100; // 1.1 segundos (margem de segurança)
+    private readonly MIN_REQUEST_INTERVAL = 1100;
 
     constructor() {
         this.loadCache();
@@ -62,11 +62,26 @@ class GeocodingService {
         this.lastRequestTime = Date.now();
     }
 
+    private simplificarEndereco(address: string): string {
+        let enderecoSimplificado = address;
+
+        enderecoSimplificado = enderecoSimplificado.replace(/,\s*ATÉ\s+[\d\/\-]+/gi, '');
+        enderecoSimplificado = enderecoSimplificado.replace(/,?\s*CEP\s*:?\s*[\d\-\.]+/gi, '');
+        enderecoSimplificado = enderecoSimplificado.replace(/,?\s*Bairro\s+/gi, ', ');
+        enderecoSimplificado = enderecoSimplificado.replace(/\s*,\s*/g, ', ');
+        enderecoSimplificado = enderecoSimplificado.replace(/,+/g, ',');
+        enderecoSimplificado = enderecoSimplificado.trim().replace(/^,|,$/g, '');
+
+        console.log('📍 Endereço original:', address);
+        console.log('📍 Endereço simplificado:', enderecoSimplificado);
+
+        return enderecoSimplificado;
+    }
+
     async geocodeAddress(address: string): Promise<Coordenadas | null> {
         try {
             console.log('🌍 Geocodificando endereço:', address);
 
-            // Verificar cache
             const cacheKey = this.getCacheKey(address);
             const cached = this.cache.get(cacheKey);
 
@@ -81,19 +96,21 @@ class GeocodingService {
                 }
             }
 
-            // Respeitar rate limit
             await this.waitForRateLimit();
+
+            const enderecoSimplificado = this.simplificarEndereco(address);
 
             console.log('🌐 Fazendo requisição ao Nominatim...');
             const response = await axios.get(`${this.NOMINATIM_BASE_URL}/search`, {
                 params: {
-                    q: address,
+                    q: enderecoSimplificado,
                     format: 'json',
                     limit: 1,
                     addressdetails: 1,
+                    countrycodes: 'br',
                 },
                 headers: {
-                    'User-Agent': 'GestGAS-Mobile/1.0 (gestgas@example.com)', // MUDE PARA SEU EMAIL
+                    'User-Agent': 'GestGAS-Mobile/1.0 (gestgas@example.com)',
                 },
                 timeout: 10000,
             });
@@ -107,13 +124,11 @@ class GeocodingService {
                     longitude: parseFloat(location.lon),
                 };
 
-                // Salvar no cache
                 this.cache.set(cacheKey, {
                     coords,
                     timestamp: Date.now(),
                 });
 
-                // Salvar cache em disco (não bloquear)
                 this.saveCache().catch(err => console.error('Erro ao salvar cache:', err));
 
                 return coords;
@@ -132,7 +147,6 @@ class GeocodingService {
         }
     }
 
-    // Método para limpar cache antigo
     async clearOldCache() {
         const now = Date.now();
         let removed = 0;
