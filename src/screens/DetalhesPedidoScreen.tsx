@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     Platform,
     Modal,
     TextInput,
+    Animated,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,76 @@ interface Props {
     navigation: any;
 }
 
+const AnimatedStatusBadge = ({ status, pulseAnim, checkAnim }: {
+    status: string;
+    pulseAnim: Animated.Value;
+    checkAnim: Animated.Value;
+}) => {
+    const getStatusColor = (status: string): string => {
+        const colors: Record<string, string> = {
+            'em_entrega': '#2196f3',
+            'entregue': '#4caf50',
+            'pendente': '#ff9800',
+            'cancelado': '#f44336',
+        };
+        return colors[status] || '#999';
+    };
+
+    const getStatusLabel = (status: string): string => {
+        const labels: Record<string, string> = {
+            'em_entrega': 'Em Entrega',
+            'entregue': 'Entregue',
+            'pendente': 'Pendente',
+            'cancelado': 'Cancelado',
+        };
+        return labels[status] || status;
+    };
+
+    const renderIcon = () => {
+        if (status === 'em_entrega') {
+            return (
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                    <Ionicons name="bicycle" size={18} color="#fff" style={{ marginRight: 6 }} />
+                </Animated.View>
+            );
+        } else if (status === 'entregue') {
+            const rotateInterpolate = checkAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '360deg'],
+            });
+
+            return (
+                <Animated.View
+                    style={{
+                        transform: [
+                            { scale: checkAnim },
+                            { rotate: rotateInterpolate }
+                        ],
+                        marginRight: 6
+                    }}
+                >
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                </Animated.View>
+            );
+        }
+        return null;
+    };
+
+    return (
+        <LinearGradient
+            colors={[getStatusColor(status), getStatusColor(status) + 'dd']}
+            style={styles.statusBadge}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+        >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {renderIcon()}
+                <Text style={styles.statusText}>{getStatusLabel(status)}</Text>
+            </View>
+        </LinearGradient>
+    );
+};
+
 export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const { pedidoId } = route.params;
 
@@ -42,6 +113,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const [quantidadesPorCasco, setQuantidadesPorCasco] = useState<{ [key: number]: { [casco_id: number]: number } }>({});
     const [produtosComRetorno, setProdutosComRetorno] = useState<ItemPedido[]>([]);
 
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const checkAnim = useRef(new Animated.Value(0)).current;
+
     useEffect(() => {
         loadPedidoDetalhes();
     }, [pedidoId]);
@@ -54,6 +128,34 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             setGeocodeError('Endereço de entrega não disponível');
         }
     }, [pedido]);
+
+    useEffect(() => {
+        if (pedido) {
+            if (pedido.status === 'em_entrega') {
+                Animated.loop(
+                    Animated.sequence([
+                        Animated.timing(pulseAnim, {
+                            toValue: 1.1,
+                            duration: 1000,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(pulseAnim, {
+                            toValue: 1,
+                            duration: 1000,
+                            useNativeDriver: true,
+                        }),
+                    ])
+                ).start();
+            } else if (pedido.status === 'entregue') {
+                Animated.spring(checkAnim, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 80,
+                    useNativeDriver: true,
+                }).start();
+            }
+        }
+    }, [pedido?.status]);
 
     const simplificarEnderecoParaNavegacao = (endereco: string): string => {
         let enderecoSimplificado = endereco;
@@ -433,14 +535,11 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                     <Text style={styles.pedidoId}>Pedido #{pedido.id}</Text>
                     <Text style={styles.pedidoData}>{formatDate(pedido.criado_em)}</Text>
                 </View>
-                <LinearGradient
-                    colors={[getStatusColor(pedido.status), getStatusColor(pedido.status) + 'dd']}
-                    style={styles.statusBadge}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                >
-                    <Text style={styles.statusText}>{getStatusLabel(pedido.status)}</Text>
-                </LinearGradient>
+                <AnimatedStatusBadge
+                    status={pedido.status}
+                    pulseAnim={pulseAnim}
+                    checkAnim={checkAnim}
+                />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
