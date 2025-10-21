@@ -46,8 +46,11 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     }, [pedidoId]);
 
     useEffect(() => {
-        if (pedido && pedido.endereco_entrega) {
+        if (pedido && pedido.endereco_entrega && typeof pedido.endereco_entrega === 'string' && pedido.endereco_entrega.trim().length > 0) {
             geocodeAddress(pedido.endereco_entrega);
+        } else if (pedido && !pedido.endereco_entrega) {
+            console.log('Pedido sem endereço de entrega');
+            setGeocodeError('Endereço de entrega não disponível');
         }
     }, [pedido]);
 
@@ -142,6 +145,23 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         try {
             setLoading(true);
             const data = await pedidosService.obterPedidoDetalhes(pedidoId);
+
+            // Validar estrutura mínima do pedido
+            if (!data || !data.id) {
+                throw new Error('Dados do pedido inválidos');
+            }
+
+            // Garantir que itens seja array
+            if (!data.itens || !Array.isArray(data.itens)) {
+                data.itens = [];
+            }
+
+            // Garantir que cliente existe
+            if (!data.cliente) {
+                data.cliente = { id: 0, nome: 'Cliente não informado', telefone: '' };
+            }
+
+            console.log('Pedido carregado:', data);
             setPedido(data);
         } catch (error: any) {
             console.error('Erro ao carregar detalhes:', error);
@@ -456,12 +476,34 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                         <Ionicons name="call" size={18} color="#1976d2" />
                         <Text style={styles.telefoneText}>{pedido.cliente.telefone}</Text>
                     </TouchableOpacity>
-                    {pedido.status === 'em_entrega' && (
-                        <View style={styles.tempoEsperaContainer}>
-                            <Ionicons name="time" size={18} color="#ff9800" />
-                            <Text style={styles.tempoEsperaText}>{calcularTempoEspera(pedido.criado_em)}</Text>
-                        </View>
-                    )}
+                    {pedido.status === 'em_entrega' && pedido.criado_em && (() => {
+                        try {
+                            const tempoEspera = calcularTempoEspera(pedido.criado_em);
+                            const agora = new Date();
+                            const criacao = new Date(pedido.criado_em);
+                            const diffDias = Math.floor((agora.getTime() - criacao.getTime()) / (1000 * 60 * 60 * 24));
+
+                            // Se passou mais de 30 dias, mostrar apenas a data
+                            if (diffDias > 30) {
+                                return (
+                                    <View style={styles.tempoEsperaContainer}>
+                                        <Ionicons name="time" size={18} color="#ff9800" />
+                                        <Text style={styles.tempoEsperaText}>Criado em {formatDate(pedido.criado_em)}</Text>
+                                    </View>
+                                );
+                            }
+
+                            return (
+                                <View style={styles.tempoEsperaContainer}>
+                                    <Ionicons name="time" size={18} color="#ff9800" />
+                                    <Text style={styles.tempoEsperaText} numberOfLines={1} ellipsizeMode="tail">{tempoEspera}</Text>
+                                </View>
+                            );
+                        } catch (error) {
+                            console.error('Erro ao calcular tempo de espera:', error);
+                            return null;
+                        }
+                    })()}
                 </View>
 
                 <View style={styles.section}>
@@ -511,23 +553,37 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                         <Ionicons name="cube" size={20} color="#1976d2" />
                         <Text style={styles.sectionTitle}>Itens do Pedido</Text>
                     </View>
-                    {pedido.itens.map((item, index) => (
-                        <View key={index} style={styles.itemRow}>
-                            <View style={styles.itemInfo}>
-                                <Text style={styles.itemNome}>{item.nome_produto}</Text>
-                                <Text style={styles.itemQtd}>Quantidade: {item.quantidade}</Text>
-                                {item.retorna_botija && (
-                                    <View style={styles.botijaTag}>
-                                        <Ionicons name="swap-horizontal" size={12} color="#ff9800" />
-                                        <Text style={styles.botijaText}>Retorna botija</Text>
+                    {pedido.itens && Array.isArray(pedido.itens) && pedido.itens.length > 0 ? (
+                        pedido.itens.map((item, index) => {
+                            if (!item) return null;
+
+                            const nomeProduto = item.nome_produto || item.produto_nome || 'Produto sem nome';
+                            const quantidade = item.quantidade || 0;
+                            const valorUnitario = item.preco_unitario || item.valor_unitario || 0;
+
+                            return (
+                                <View key={index} style={styles.itemRow}>
+                                    <View style={styles.itemInfo}>
+                                        <Text style={styles.itemNome}>{nomeProduto}</Text>
+                                        <Text style={styles.itemQtd}>Quantidade: {quantidade}</Text>
+                                        {item.retorna_botija && (
+                                            <View style={styles.botijaTag}>
+                                                <Ionicons name="swap-horizontal" size={12} color="#ff9800" />
+                                                <Text style={styles.botijaText}>Retorna botija</Text>
+                                            </View>
+                                        )}
                                     </View>
-                                )}
-                            </View>
-                            <Text style={styles.itemValor}>
-                                {formatCurrency(item.preco_unitario || item.valor_unitario || 0)}
-                            </Text>
+                                    <Text style={styles.itemValor}>
+                                        {formatCurrency(valorUnitario)}
+                                    </Text>
+                                </View>
+                            );
+                        })
+                    ) : (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 14, color: '#999' }}>Nenhum item encontrado</Text>
                         </View>
-                    ))}
+                    )}
                 </View>
 
                 <View style={styles.totalSection}>
