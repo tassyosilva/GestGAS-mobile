@@ -23,7 +23,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1976d2"
       },
-      "package": "com.gestgas.entregas"
+      "package": "com.gestgas.entregas",
+      "navigationBar": {
+        "visible": "leanback",
+        "barStyle": "dark-content",
+        "backgroundColor": "#ffffff"
+      },
+      "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [
       [

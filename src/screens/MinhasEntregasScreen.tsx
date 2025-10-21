@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
+    Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -446,14 +447,15 @@ const styles = StyleSheet.create({
     },
     historicoButton: {
         position: 'absolute',
-        bottom: 0,
+        bottom: Platform.OS === 'android' ? 40 : 0,
         left: 0,
         right: 0,
         backgroundColor: '#1976d2',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
+        paddingTop: 10,
+        paddingBottom: Platform.OS === 'android' ? 15 : 14,
         gap: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
@@ -468,7 +470,7 @@ const styles = StyleSheet.create({
     },
     finalizadosContainer: {
         position: 'absolute',
-        bottom: 56,
+        bottom: Platform.OS === 'android' ? 91: 56,
         left: 0,
         right: 0,
         backgroundColor: '#fff',

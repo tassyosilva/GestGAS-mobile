@@ -841,6 +841,7 @@ const styles = StyleSheet.create({
     confirmarButton: {
         backgroundColor: '#4caf50',
         marginHorizontal: 16,
+        marginBottom: Platform.OS === 'android' ? 30 : 0,
         padding: 16,
         borderRadius: 12,
         flexDirection: 'row',
@@ -954,6 +955,7 @@ const styles = StyleSheet.create({
     modalFooter: {
         flexDirection: 'row',
         padding: 16,
+        paddingBottom: Platform.OS === 'android' ? 30 : 16,
         gap: 12,
         borderTopWidth: 1,
         borderTopColor: '#eee',
