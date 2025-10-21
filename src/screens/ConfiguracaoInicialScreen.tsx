@@ -26,47 +26,117 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     const [loading, setLoading] = useState(false);
     const [testingConnection, setTestingConnection] = useState(false);
 
+    const validarUrl = (url: string): { valida: boolean; mensagem: string } => {
+        if (!url || url.trim().length === 0) {
+            return { valida: false, mensagem: 'Digite o endereço do servidor' };
+        }
+
+        // Verificar se começa com http:// ou https://
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return { valida: false, mensagem: 'A URL deve começar com http:// ou https://' };
+        }
+
+        // Validar formato básico de URL
+        try {
+            new URL(url);
+            return { valida: true, mensagem: '' };
+        } catch (error) {
+            return { valida: false, mensagem: 'URL inválida. Verifique o formato do endereço' };
+        }
+    };
+
     const testConnection = async () => {
-        if (!serverUrl) {
-            Alert.alert('Erro', 'Digite o endereço do servidor');
+        // Validar URL primeiro
+        const validacao = validarUrl(serverUrl);
+        if (!validacao.valida) {
+            Alert.alert('Erro', validacao.mensagem);
             return;
         }
 
         setTestingConnection(true);
 
         try {
-            const url = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
+            const url = serverUrl.trim().endsWith('/') ? serverUrl.trim().slice(0, -1) : serverUrl.trim();
 
-            // Tentar uma requisição simples
-            await axios.get(`${url}/api/health`, { timeout: 5000 });
+            console.log('Testando conexão com:', url);
 
-            Alert.alert('Sucesso', 'Conexão com o servidor estabelecida!');
+            // Tentar requisição ao endpoint de health
+            const response = await axios.get(`${url}/api/health`, {
+                timeout: 5000,
+                validateStatus: (status) => status < 500 // Aceitar respostas < 500
+            });
+
+            console.log('Resposta do servidor:', response.status);
+
+            if (response.status === 200 || response.status === 404) {
+                // 404 significa que o servidor respondeu, mas o endpoint não existe
+                Alert.alert('Sucesso', 'Conexão com o servidor estabelecida!');
+            } else {
+                Alert.alert('Aviso', `Servidor respondeu com status ${response.status}. Você pode tentar fazer login.`);
+            }
         } catch (error: any) {
             console.error('Erro ao testar conexão:', error);
-            Alert.alert(
-                'Erro de Conexão',
-                'Não foi possível conectar ao servidor. Verifique o endereço e sua conexão com a internet.'
-            );
+
+            let errorMessage = 'Não foi possível conectar ao servidor.';
+
+            if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+                errorMessage = 'Tempo de conexão esgotado. Verifique o endereço e sua internet.';
+            } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+                errorMessage = 'Erro de rede. Verifique sua conexão com a internet.';
+            } else if (error.message?.includes('ENOTFOUND')) {
+                errorMessage = 'Servidor não encontrado. Verifique se o endereço está correto.';
+            } else if (error.response) {
+                errorMessage = `Servidor respondeu com erro ${error.response.status}. O servidor pode estar temporariamente indisponível.`;
+            }
+
+            Alert.alert('Erro de Conexão', errorMessage);
         } finally {
             setTestingConnection(false);
         }
     };
 
     const handleSubmit = async () => {
+        // Validar campos vazios
         if (!serverUrl || !login || !senha) {
             Alert.alert('Erro', 'Preencha todos os campos');
+            return;
+        }
+
+        // Validar URL
+        const validacao = validarUrl(serverUrl);
+        if (!validacao.valida) {
+            Alert.alert('Erro', validacao.mensagem);
+            return;
+        }
+
+        // Validar login e senha não vazios após trim
+        if (login.trim().length === 0 || senha.trim().length === 0) {
+            Alert.alert('Erro', 'Login e senha não podem conter apenas espaços');
             return;
         }
 
         setLoading(true);
 
         try {
-            const normalizedUrl = serverUrl.endsWith('/')
-                ? serverUrl.slice(0, -1)
-                : serverUrl;
+            const normalizedUrl = serverUrl.trim().endsWith('/')
+                ? serverUrl.trim().slice(0, -1)
+                : serverUrl.trim();
+
+            console.log('Tentando login em:', normalizedUrl);
 
             // Fazer login
-            const response = await authService.login(normalizedUrl, login, senha);
+            const response = await authService.login(normalizedUrl, login.trim(), senha);
+
+            // Validar resposta do login
+            if (!response || typeof response !== 'object') {
+                throw new Error('Resposta inválida do servidor');
+            }
+
+            if (!response.token || !response.id || !response.nome || !response.perfil) {
+                throw new Error('Dados de autenticação incompletos recebidos do servidor');
+            }
+
+            console.log('Login bem-sucedido. Perfil:', response.perfil);
 
             // Verificar se é entregador
             if (response.perfil !== 'entregador') {
@@ -81,6 +151,8 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
             // Salvar dados
             await authService.saveAuthData(normalizedUrl, response);
 
+            console.log('Configuração concluída com sucesso');
+
             // Notificar conclusão
             onConfigComplete();
         } catch (error: any) {
@@ -90,10 +162,18 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
             if (error.response?.status === 401) {
                 errorMessage = 'Login ou senha inválidos';
+            } else if (error.response?.status === 404) {
+                errorMessage = 'Endpoint de login não encontrado. Verifique o endereço do servidor.';
+            } else if (error.response?.status === 500) {
+                errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.';
             } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
                 errorMessage = 'Tempo de conexão esgotado. Verifique sua internet.';
-            } else if (error.message.includes('Network Error')) {
+            } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
                 errorMessage = 'Erro de rede. Verifique sua conexão.';
+            } else if (error.message?.includes('ENOTFOUND')) {
+                errorMessage = 'Servidor não encontrado. Verifique o endereço.';
+            } else if (error.message === 'Resposta inválida do servidor' || error.message === 'Dados de autenticação incompletos recebidos do servidor') {
+                errorMessage = error.message;
             }
 
             Alert.alert('Erro', errorMessage);
@@ -119,10 +199,12 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                             style={styles.input}
                             placeholder="https://seuservidor.com"
                             value={serverUrl}
-                            onChangeText={setServerUrl}
+                            onChangeText={(text) => setServerUrl(text.trim())}
                             autoCapitalize="none"
+                            autoCorrect={false}
                             keyboardType="url"
                             editable={!loading}
+                            returnKeyType="next"
                         />
                         <TouchableOpacity
                             style={[styles.testButton, testingConnection && styles.buttonDisabled]}
@@ -146,7 +228,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                             value={login}
                             onChangeText={setLogin}
                             autoCapitalize="none"
+                            autoCorrect={false}
                             editable={!loading}
+                            returnKeyType="next"
                         />
                     </View>
 
@@ -159,7 +243,11 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                             value={senha}
                             onChangeText={setSenha}
                             secureTextEntry
+                            autoCapitalize="none"
+                            autoCorrect={false}
                             editable={!loading}
+                            returnKeyType="done"
+                            onSubmitEditing={handleSubmit}
                         />
                     </View>
 
