@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginTop: -10,
         marginBottom: 16,
-        paddingVertical: 16,
+        paddingVertical: 14,
         paddingHorizontal: 20,
         borderRadius: 12,
         alignItems: 'center',
