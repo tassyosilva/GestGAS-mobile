@@ -51,10 +51,35 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         }
     }, [pedido]);
 
+    const simplificarEnderecoParaNavegacao = (endereco: string): string => {
+        let enderecoSimplificado = endereco;
+
+        // Remover CEP
+        enderecoSimplificado = enderecoSimplificado.replace(/,?\s*CEP\s*:?\s*[\d\-\.]+/gi, '');
+
+        // Remover complementos residenciais (Casa, Apartamento, Apto, etc.)
+        enderecoSimplificado = enderecoSimplificado.replace(/,\s*(Casa|Apartamento|Apto|Ap|Sala|Loja|Galpão|Sobrado|Bloco|Torre)\b[^,]*/gi, '');
+
+        // Remover bairros genéricos ou não informados
+        enderecoSimplificado = enderecoSimplificado.replace(/,\s*Bairro\s+(Outros\/Não informado|Não informado|Outros|N\/A|S\/N)\b[^,]*/gi, '');
+
+        // Limpar "Bairro" genérico
+        enderecoSimplificado = enderecoSimplificado.replace(/,?\s*Bairro\s+/gi, ', ');
+
+        // Normalizar vírgulas e espaços
+        enderecoSimplificado = enderecoSimplificado.replace(/\s*,\s*/g, ', ');
+        enderecoSimplificado = enderecoSimplificado.replace(/,+/g, ',');
+        enderecoSimplificado = enderecoSimplificado.trim().replace(/^,|,$/g, '');
+
+        return enderecoSimplificado;
+    };
+
     const abrirNavegacao = () => {
         if (!pedido) return;
 
-        const endereco = pedido.endereco_entrega;
+        const enderecoOriginal = pedido.endereco_entrega;
+        const endereco = simplificarEnderecoParaNavegacao(enderecoOriginal);
+
         console.log('Abrindo navegação para:', endereco);
 
         const enderecoEncoded = encodeURIComponent(endereco);
