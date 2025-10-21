@@ -46,7 +46,7 @@ class AuthService {
         }
     }
 
-    async saveAuthData(serverUrl: string, data: LoginResponse): Promise<void> {
+    async saveAuthData(serverUrl: string, data: LoginResponse, credentials?: { login: string; senha: string }): Promise<void> {
         try {
             await storageService.setServerUrl(serverUrl);
             await storageService.setToken(data.token);
@@ -56,6 +56,10 @@ class AuthService {
                 login: data.login,
                 perfil: data.perfil,
             });
+
+            if (credentials) {
+                await storageService.setCredentials(credentials.login, credentials.senha);
+            }
 
             // Atualizar URL base local
             this.apiBaseUrl = serverUrl;
@@ -96,6 +100,24 @@ class AuthService {
 
     async getUser(): Promise<Usuario | null> {
         return await storageService.getUser();
+    }
+
+    async loginWithCredentials(): Promise<boolean> {
+        try {
+            const serverUrl = await storageService.getServerUrl();
+            const credentials = await storageService.getCredentials();
+
+            if (!serverUrl || !credentials) {
+                return false;
+            }
+
+            const response = await this.login(serverUrl, credentials.login, credentials.senha);
+            await this.saveAuthData(serverUrl, response);
+            return true;
+        } catch (error) {
+            console.error('Erro ao fazer login com credenciais salvas:', error);
+            return false;
+        }
     }
 
     async logout(): Promise<void> {

@@ -10,6 +10,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { authService } from '../services/authService';
@@ -26,19 +27,31 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     const [loading, setLoading] = useState(false);
     const [testingConnection, setTestingConnection] = useState(false);
 
+    const normalizeServerUrl = (url: string): string => {
+        let normalized = url.trim();
+
+        if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+            return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+        }
+
+        const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/.test(normalized);
+
+        if (isIpAddress) {
+            return `http://${normalized}`;
+        } else {
+            return `https://${normalized}`;
+        }
+    };
+
     const validarUrl = (url: string): { valida: boolean; mensagem: string } => {
         if (!url || url.trim().length === 0) {
             return { valida: false, mensagem: 'Digite o endereço do servidor' };
         }
 
-        // Verificar se começa com http:// ou https://
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            return { valida: false, mensagem: 'A URL deve começar com http:// ou https://' };
-        }
+        const normalizedUrl = normalizeServerUrl(url);
 
-        // Validar formato básico de URL
         try {
-            new URL(url);
+            new URL(normalizedUrl);
             return { valida: true, mensagem: '' };
         } catch (error) {
             return { valida: false, mensagem: 'URL inválida. Verifique o formato do endereço' };
@@ -46,7 +59,6 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     };
 
     const testConnection = async () => {
-        // Validar URL primeiro
         const validacao = validarUrl(serverUrl);
         if (!validacao.valida) {
             Alert.alert('Erro', validacao.mensagem);
@@ -56,20 +68,18 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         setTestingConnection(true);
 
         try {
-            const url = serverUrl.trim().endsWith('/') ? serverUrl.trim().slice(0, -1) : serverUrl.trim();
+            const url = normalizeServerUrl(serverUrl);
 
             console.log('Testando conexão com:', url);
 
-            // Tentar requisição ao endpoint de health
             const response = await axios.get(`${url}/api/health`, {
                 timeout: 5000,
-                validateStatus: (status) => status < 500 // Aceitar respostas < 500
+                validateStatus: (status) => status < 500
             });
 
             console.log('Resposta do servidor:', response.status);
 
             if (response.status === 200 || response.status === 404) {
-                // 404 significa que o servidor respondeu, mas o endpoint não existe
                 Alert.alert('Sucesso', 'Conexão com o servidor estabelecida!');
             } else {
                 Alert.alert('Aviso', `Servidor respondeu com status ${response.status}. Você pode tentar fazer login.`);
@@ -96,20 +106,17 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     };
 
     const handleSubmit = async () => {
-        // Validar campos vazios
         if (!serverUrl || !login || !senha) {
             Alert.alert('Erro', 'Preencha todos os campos');
             return;
         }
 
-        // Validar URL
         const validacao = validarUrl(serverUrl);
         if (!validacao.valida) {
             Alert.alert('Erro', validacao.mensagem);
             return;
         }
 
-        // Validar login e senha não vazios após trim
         if (login.trim().length === 0 || senha.trim().length === 0) {
             Alert.alert('Erro', 'Login e senha não podem conter apenas espaços');
             return;
@@ -118,16 +125,12 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         setLoading(true);
 
         try {
-            const normalizedUrl = serverUrl.trim().endsWith('/')
-                ? serverUrl.trim().slice(0, -1)
-                : serverUrl.trim();
+            const normalizedUrl = normalizeServerUrl(serverUrl);
 
             console.log('Tentando login em:', normalizedUrl);
 
-            // Fazer login
             const response = await authService.login(normalizedUrl, login.trim(), senha);
 
-            // Validar resposta do login
             if (!response || typeof response !== 'object') {
                 throw new Error('Resposta inválida do servidor');
             }
@@ -138,7 +141,6 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
             console.log('Login bem-sucedido. Perfil:', response.perfil);
 
-            // Verificar se é entregador
             if (response.perfil !== 'entregador') {
                 Alert.alert(
                     'Acesso Negado',
@@ -148,12 +150,10 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                 return;
             }
 
-            // Salvar dados
-            await authService.saveAuthData(normalizedUrl, response);
+            await authService.saveAuthData(normalizedUrl, response, { login: login.trim(), senha });
 
             console.log('Configuração concluída com sucesso');
 
-            // Notificar conclusão
             onConfigComplete();
         } catch (error: any) {
             console.error('Erro ao configurar:', error);
@@ -186,18 +186,20 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         <View style={styles.container}>
             <StatusBar style="light" />
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Configuração Inicial</Text>
-                    <Text style={styles.subtitle}>Configure o acesso ao sistema</Text>
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require('../../assets/icon.png')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
                 </View>
 
                 <View style={styles.form}>
-                    {/* URL do Servidor */}
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Endereço do Servidor</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="https://seuservidor.com"
+                            placeholder="Ex.: nomedaempresa.gestgas.com"
                             value={serverUrl}
                             onChangeText={(text) => setServerUrl(text.trim())}
                             autoCapitalize="none"
@@ -219,7 +221,6 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Login */}
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Login</Text>
                         <TextInput
@@ -234,7 +235,6 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                         />
                     </View>
 
-                    {/* Senha */}
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Senha</Text>
                         <TextInput
@@ -251,7 +251,6 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                         />
                     </View>
 
-                    {/* Botão de Submit */}
                     <TouchableOpacity
                         style={[styles.submitButton, loading && styles.buttonDisabled]}
                         onPress={handleSubmit}
@@ -260,19 +259,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
                         {loading ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <Text style={styles.submitButtonText}>Conectar e Salvar</Text>
+                            <Text style={styles.submitButtonText}>Entrar</Text>
                         )}
                     </TouchableOpacity>
-
-                    {/* Informações */}
-                    <View style={styles.infoBox}>
-                        <Text style={styles.infoText}>
-                            💡 O endereço do servidor deve incluir http:// ou https://
-                        </Text>
-                        <Text style={styles.infoText}>
-                            📱 Teste a conexão antes de salvar as configurações
-                        </Text>
-                    </View>
                 </View>
             </ScrollView>
         </View>
@@ -289,19 +278,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 20,
     },
-    header: {
+    logoContainer: {
         alignItems: 'center',
         marginBottom: 40,
     },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1976d2',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
+    logo: {
+        width: 120,
+        height: 120,
     },
     form: {
         backgroundColor: '#fff',
@@ -356,16 +339,5 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: {
         opacity: 0.6,
-    },
-    infoBox: {
-        backgroundColor: '#e3f2fd',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 20,
-    },
-    infoText: {
-        fontSize: 12,
-        color: '#666',
-        marginBottom: 6,
     },
 });
