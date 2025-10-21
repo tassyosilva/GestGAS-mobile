@@ -66,20 +66,23 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
     };
 
-    // NOVO: Função leve para buscar apenas o total de finalizados
+    // Função leve para buscar apenas o total de finalizados
     const loadTotalFinalizados = async () => {
         if (!user) return;
         try {
             const response = await pedidosService.listarPedidosFinalizados({
                 entregador_id: user.id,
                 page: 1,
-                limit: 1, // Pede apenas 1 item para ser uma chamada rápida
+                limit: 1,
             });
             if (response && typeof response.total === 'number') {
                 setTotalFinalizados(response.total);
+            } else {
+                setTotalFinalizados(0);
             }
         } catch (error) {
             console.error('Erro ao carregar total de finalizados:', error);
+            setTotalFinalizados(0);
         }
     };
 
@@ -92,15 +95,21 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 page: page + 1,
                 limit,
             });
-            if (response && response.pedidos) {
-                setPedidos(response.pedidos);
-                setTotal(response.total || 0);
+
+            if (response && response.pedidos && Array.isArray(response.pedidos)) {
+                // Filtrar pedidos válidos
+                const pedidosValidos = response.pedidos.filter((p: any) => p && p.id && p.cliente);
+                setPedidos(pedidosValidos);
+                setTotal(typeof response.total === 'number' ? response.total : 0);
             } else {
                 setPedidos([]);
                 setTotal(0);
             }
         } catch (error: any) {
             console.error('Erro ao carregar entregas:', error);
+            setPedidos([]);
+            setTotal(0);
+
             let errorMessage = 'Erro ao carregar entregas';
             if (error.response?.status === 401 || error.message === 'Sessão expirada') {
                 errorMessage = 'Sessão expirada. Faça login novamente.';
@@ -125,30 +134,38 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 page: pageFinalizados + 1,
                 limit: limitFinalizados,
             });
-            if (response && response.pedidos) {
-                const pedidosResolvidosData = response.pedidos.map((p: any) => ({
-                    id: p.id,
-                    data_entregador_atribuido: p.data_entregador_atribuido,
-                    data_entrega: p.data_entrega,
-                    endereco_entrega: p.endereco_entrega,
-                    valor_total: p.valor_total,
-                    cliente_nome: p.cliente?.nome || p.cliente_nome || 'Cliente',
-                    status: p.status,
-                    bairro: p.bairro,
-                    forma_pagamento: p.forma_pagamento,
-                }));
+
+            if (response && response.pedidos && Array.isArray(response.pedidos)) {
+                const pedidosResolvidosData = response.pedidos
+                    .filter((p: any) => p && p.id) // Filtrar pedidos nulos ou sem ID
+                    .map((p: any) => ({
+                        id: p.id,
+                        data_entregador_atribuido: p.data_entregador_atribuido || null,
+                        data_entrega: p.data_entrega || null,
+                        endereco_entrega: p.endereco_entrega || '',
+                        valor_total: p.valor_total || 0,
+                        cliente_nome: p.cliente?.nome || p.cliente_nome || 'Cliente',
+                        status: p.status || 'desconhecido',
+                        bairro: p.bairro || null,
+                        forma_pagamento: p.forma_pagamento || null,
+                    }));
+
                 if (pageFinalizados === 0) {
                     setPedidosFinalizados(pedidosResolvidosData);
                 } else {
                     setPedidosFinalizados(prevPedidos => [...prevPedidos, ...pedidosResolvidosData]);
                 }
-                setTotalFinalizados(response.total || 0);
+                setTotalFinalizados(typeof response.total === 'number' ? response.total : 0);
             } else if (pageFinalizados === 0) {
                 setPedidosFinalizados([]);
                 setTotalFinalizados(0);
             }
         } catch (error: any) {
             console.error('Erro ao carregar pedidos finalizados:', error);
+            if (pageFinalizados === 0) {
+                setPedidosFinalizados([]);
+                setTotalFinalizados(0);
+            }
         } finally {
             setLoadingFinalizados(false);
         }
@@ -222,50 +239,61 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         </View>
     );
 
-    const renderPedidoFinalizadoCard = ({ item }: { item: PedidoResolvido }) => (
-        <View style={styles.finalizadoCard}>
-            <View style={styles.finalizadoHeader}>
-                <Text style={styles.finalizadoId}>#{item.id}</Text>
-                <Text style={styles.finalizadoCliente}>{item.cliente_nome}</Text>
-            </View>
-            <View style={styles.finalizadoInfo}>
-                {item.bairro && (
-                    <View style={styles.finalizadoRow}>
-                        <Ionicons name="location-outline" size={14} color="#666" />
-                        <Text style={styles.finalizadoText}>{item.bairro}</Text>
+    const renderPedidoFinalizadoCard = ({ item }: { item: PedidoResolvido }) => {
+        if (!item || !item.id) return null;
+
+        try {
+            return (
+                <View style={styles.finalizadoCard}>
+                    <View style={styles.finalizadoHeader}>
+                        <Text style={styles.finalizadoId}>#{item.id}</Text>
+                        <Text style={styles.finalizadoCliente}>{item.cliente_nome || 'Cliente'}</Text>
                     </View>
-                )}
-                {item.data_entregador_atribuido && (
-                    <View style={styles.finalizadoRow}>
-                        <Ionicons name="person-outline" size={14} color="#666" />
-                        <Text style={styles.finalizadoText}>
-                            Atribuído: {formatShortDate(item.data_entregador_atribuido)}
-                        </Text>
+                    <View style={styles.finalizadoInfo}>
+                        {item.bairro && typeof item.bairro === 'string' && (
+                            <View style={styles.finalizadoRow}>
+                                <Ionicons name="location-outline" size={14} color="#666" />
+                                <Text style={styles.finalizadoText}>{item.bairro}</Text>
+                            </View>
+                        )}
+                        {item.data_entregador_atribuido && (
+                            <View style={styles.finalizadoRow}>
+                                <Ionicons name="person-outline" size={14} color="#666" />
+                                <Text style={styles.finalizadoText}>
+                                    Atribuído: {formatShortDate(item.data_entregador_atribuido)}
+                                </Text>
+                            </View>
+                        )}
+                        {item.data_entrega && (
+                            <View style={styles.finalizadoRow}>
+                                <Ionicons name="checkmark-circle-outline" size={14} color="#4caf50" />
+                                <Text style={styles.finalizadoText}>
+                                    Entregue: {formatShortDate(item.data_entrega)}
+                                </Text>
+                            </View>
+                        )}
+                        {item.data_entregador_atribuido && item.data_entrega && (
+                            <View style={styles.finalizadoRow}>
+                                <Ionicons name="time-outline" size={14} color="#666" />
+                                <Text style={styles.finalizadoText}>
+                                    Tempo: {calcularTempoEntrega(item.data_entregador_atribuido, item.data_entrega)}
+                                </Text>
+                            </View>
+                        )}
+                        {item.forma_pagamento && typeof item.forma_pagamento === 'string' && (
+                            <View style={styles.finalizadoRow}>
+                                <Ionicons name="card-outline" size={14} color="#666" />
+                                <Text style={styles.finalizadoText}>{item.forma_pagamento}</Text>
+                            </View>
+                        )}
                     </View>
-                )}
-                {item.data_entrega && (
-                    <View style={styles.finalizadoRow}>
-                        <Ionicons name="checkmark-circle-outline" size={14} color="#4caf50" />
-                        <Text style={styles.finalizadoText}>
-                            Entregue: {formatShortDate(item.data_entrega)}
-                        </Text>
-                    </View>
-                )}
-                <View style={styles.finalizadoRow}>
-                    <Ionicons name="time-outline" size={14} color="#666" />
-                    <Text style={styles.finalizadoText}>
-                        Tempo: {calcularTempoEntrega(item.data_entregador_atribuido, item.data_entrega)}
-                    </Text>
                 </View>
-                {item.forma_pagamento && (
-                    <View style={styles.finalizadoRow}>
-                        <Ionicons name="card-outline" size={14} color="#666" />
-                        <Text style={styles.finalizadoText}>{item.forma_pagamento}</Text>
-                    </View>
-                )}
-            </View>
-        </View>
-    );
+            );
+        } catch (error) {
+            console.error('Erro ao renderizar pedido finalizado:', error);
+            return null;
+        }
+    };
 
     const renderFooter = () => {
         if (!loading || pedidos.length === 0) return null;
@@ -304,10 +332,11 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
             <FlatList
                 data={pedidos}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                    <PedidoCard pedido={item} onPress={() => handlePedidoPress(item)} />
-                )}
+                keyExtractor={(item, index) => item?.id ? item.id.toString() : `pedido-${index}`}
+                renderItem={({ item }) => {
+                    if (!item || !item.id || !item.cliente) return null;
+                    return <PedidoCard pedido={item} onPress={() => handlePedidoPress(item)} />;
+                }}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={loading ? null : renderEmpty}
                 ListFooterComponent={renderFooter}
