@@ -13,6 +13,8 @@ import {
     Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { authService } from '../services/authService';
 import axios from 'axios';
 
@@ -45,7 +47,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
     const validarUrl = (url: string): { valida: boolean; mensagem: string } => {
         if (!url || url.trim().length === 0) {
-            return { valida: false, mensagem: 'Digite o endereço do servidor' };
+            return { valida: false, mensagem: 'Digite o endereço web da empresa' };
         }
 
         const normalizedUrl = normalizeServerUrl(url);
@@ -183,35 +185,64 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     };
 
     return (
-        <View style={styles.container}>
+        <LinearGradient
+            colors={['#1565c0', '#1976d2', '#42a5f5']}
+            style={styles.container}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+        >
             <StatusBar style="light" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
                 <View style={styles.logoContainer}>
-                    <Image
-                        source={require('../../assets/icon.png')}
-                        style={styles.logo}
-                        resizeMode="contain"
-                    />
+                    <View style={styles.logoShadow}>
+                        <Image
+                            source={require('../../assets/icon.png')}
+                            style={styles.logo}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <View style={styles.appTitleContainer}>
+                        <Text style={styles.appTitle}>GestGAS</Text>
+                        <View style={styles.appTitleShadow}>
+                            <Text style={styles.appTitleOutline}>GestGAS</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.appSubtitle}>Sistema de Entregas</Text>
                 </View>
 
-                <View style={styles.form}>
+                <View style={styles.formCard}>
+                    <View style={styles.formHeader}>
+                        <Text style={styles.formTitle}>Insira seus dados</Text>
+                    </View>
+
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Endereço do Servidor</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Ex.: nomedaempresa.gestgas.com"
-                            value={serverUrl}
-                            onChangeText={(text) => setServerUrl(text.trim())}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            keyboardType="url"
-                            editable={!loading}
-                            returnKeyType="next"
-                        />
+                        <Text style={styles.label}>Endereço web da empresa</Text>
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="globe-outline" size={20} color="#1976d2" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ex.: nomedaempresa.gestgas.com"
+                                placeholderTextColor="#999"
+                                value={serverUrl}
+                                onChangeText={(text) => setServerUrl(text.trim())}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                keyboardType="url"
+                                editable={!loading}
+                                returnKeyType="next"
+                            />
+                        </View>
                         <TouchableOpacity
-                            style={[styles.testButton, testingConnection && styles.buttonDisabled]}
+                            style={[
+                                styles.testButton,
+                                (testingConnection || !serverUrl) && styles.buttonDisabled
+                            ]}
                             onPress={testConnection}
                             disabled={testingConnection || !serverUrl}
+                            activeOpacity={0.8}
                         >
                             {testingConnection ? (
                                 <ActivityIndicator size="small" color="#fff" />
@@ -223,78 +254,171 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Login</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Digite seu login"
-                            value={login}
-                            onChangeText={setLogin}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            editable={!loading}
-                            returnKeyType="next"
-                        />
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="person-outline" size={20} color="#1976d2" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Digite seu login"
+                                placeholderTextColor="#999"
+                                value={login}
+                                onChangeText={setLogin}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                editable={!loading}
+                                returnKeyType="next"
+                            />
+                        </View>
                     </View>
 
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Senha</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Digite sua senha"
-                            value={senha}
-                            onChangeText={setSenha}
-                            secureTextEntry
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            editable={!loading}
-                            returnKeyType="done"
-                            onSubmitEditing={handleSubmit}
-                        />
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="lock-closed-outline" size={20} color="#1976d2" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Digite sua senha"
+                                placeholderTextColor="#999"
+                                value={senha}
+                                onChangeText={setSenha}
+                                secureTextEntry
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                editable={!loading}
+                                returnKeyType="done"
+                                onSubmitEditing={handleSubmit}
+                            />
+                        </View>
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.submitButton, loading && styles.buttonDisabled]}
+                        style={[
+                            styles.submitButton,
+                            (loading || !serverUrl || !login || !senha) && styles.submitButtonDisabled
+                        ]}
                         onPress={handleSubmit}
                         disabled={loading || !serverUrl || !login || !senha}
+                        activeOpacity={0.9}
                     >
-                        {loading ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <Text style={styles.submitButtonText}>Entrar</Text>
-                        )}
+                        <LinearGradient
+                            colors={
+                                loading || !serverUrl || !login || !senha
+                                    ? ['#ccc', '#999']
+                                    : ['#0d47a1', '#1565c0', '#1976d2']
+                            }
+                            style={styles.submitButtonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            {loading ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Text style={styles.submitButtonText}>Entrar</Text>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Acesso exclusivo para entregadores
+                    </Text>
+                </View>
             </ScrollView>
-        </View>
+        </LinearGradient>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
     },
     scrollContent: {
         flexGrow: 1,
         justifyContent: 'center',
-        padding: 20,
+        padding: 24,
+        paddingTop: 60,
+        paddingBottom: 40,
     },
     logoContainer: {
         alignItems: 'center',
         marginBottom: 40,
     },
-    logo: {
-        width: 120,
-        height: 120,
-    },
-    form: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 20,
+    logoShadow: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+        backgroundColor: '#fff',
+        borderRadius: 30,
+        padding: 8,
+    },
+    logo: {
+        width: 100,
+        height: 100,
+    },
+    appTitleContainer: {
+        position: 'relative',
+        marginTop: 20,
+    },
+    appTitle: {
+        fontSize: 38,
+        fontWeight: 'bold',
+        color: '#fff',
+        letterSpacing: 2,
+        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 4 },
+        textShadowRadius: 8,
+        zIndex: 2,
+    },
+    appTitleShadow: {
+        position: 'absolute',
+        top: 3,
+        left: 0,
+        right: 0,
+        zIndex: 1,
+    },
+    appTitleOutline: {
+        fontSize: 38,
+        fontWeight: 'bold',
+        color: 'rgba(0, 0, 0, 0.2)',
+        letterSpacing: 2,
+        textAlign: 'center',
+    },
+    appSubtitle: {
+        fontSize: 16,
+        color: '#e3f2fd',
+        marginTop: 8,
+        letterSpacing: 0.5,
+    },
+    formCard: {
+        backgroundColor: '#ffffffff',
+        borderRadius: 20,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    formHeader: {
+        marginBottom: 24,
+        paddingBottom: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#bbdefb',
+        alignItems: 'center',
+    },
+    formTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#1565c0',
+        marginBottom: 6,
+        textAlign: 'center',
+    },
+    formSubtitle: {
+        fontSize: 14,
+        color: '#1976d2',
+        textAlign: 'center',
     },
     inputContainer: {
         marginBottom: 20,
@@ -304,40 +428,90 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
         marginBottom: 8,
+        marginLeft: 4,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        borderWidth: 1.5,
+        borderColor: '#bbdefb',
+        paddingLeft: 14,
+    },
+    inputIcon: {
+        marginRight: 10,
     },
     input: {
-        backgroundColor: '#f9f9f9',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 12,
+        flex: 1,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        padding: 14,
+        paddingLeft: 0,
         fontSize: 16,
+        color: '#333',
     },
     testButton: {
-        backgroundColor: '#64b5f6',
-        borderRadius: 8,
-        padding: 10,
-        marginTop: 8,
+        backgroundColor: '#42a5f5',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 10,
         alignItems: 'center',
+        shadowColor: '#42a5f5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     testButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
+        letterSpacing: 0.3,
     },
     submitButton: {
-        backgroundColor: '#1976d2',
-        borderRadius: 8,
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginTop: 10,
+        shadowColor: '#0d47a1',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    submitButtonGradient: {
         padding: 16,
         alignItems: 'center',
-        marginTop: 10,
+        justifyContent: 'center',
     },
     submitButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
+        letterSpacing: 0.5,
     },
     buttonDisabled: {
-        opacity: 0.6,
+        opacity: 0.5,
+        shadowOpacity: 0.1,
+        elevation: 2,
+    },
+    submitButtonDisabled: {
+        shadowOpacity: 0.1,
+        elevation: 2,
+    },
+    footer: {
+        marginTop: 30,
+        alignItems: 'center',
+    },
+    footerText: {
+        color: '#e3f2fd',
+        fontSize: 13,
+        textAlign: 'center',
+        letterSpacing: 0.3,
     },
 });
