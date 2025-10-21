@@ -12,6 +12,7 @@ import {
     TextInput,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { pedidosService } from '../services/pedidoService';
 import { geocodingService } from '../services/geocodingService';
@@ -57,19 +58,10 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     const simplificarEnderecoParaNavegacao = (endereco: string): string => {
         let enderecoSimplificado = endereco;
 
-        // Remover CEP
         enderecoSimplificado = enderecoSimplificado.replace(/,?\s*CEP\s*:?\s*[\d\-\.]+/gi, '');
-
-        // Remover complementos residenciais (Casa, Apartamento, Apto, etc.)
         enderecoSimplificado = enderecoSimplificado.replace(/,\s*(Casa|Apartamento|Apto|Ap|Sala|Loja|Galpão|Sobrado|Bloco|Torre)\b[^,]*/gi, '');
-
-        // Remover bairros genéricos ou não informados
         enderecoSimplificado = enderecoSimplificado.replace(/,\s*Bairro\s+(Outros\/Não informado|Não informado|Outros|N\/A|S\/N)\b[^,]*/gi, '');
-
-        // Limpar "Bairro" genérico
         enderecoSimplificado = enderecoSimplificado.replace(/,?\s*Bairro\s+/gi, ', ');
-
-        // Normalizar vírgulas e espaços
         enderecoSimplificado = enderecoSimplificado.replace(/\s*,\s*/g, ', ');
         enderecoSimplificado = enderecoSimplificado.replace(/,+/g, ',');
         enderecoSimplificado = enderecoSimplificado.trim().replace(/^,|,$/g, '');
@@ -146,17 +138,14 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             setLoading(true);
             const data = await pedidosService.obterPedidoDetalhes(pedidoId);
 
-            // Validar estrutura mínima do pedido
             if (!data || !data.id) {
                 throw new Error('Dados do pedido inválidos');
             }
 
-            // Garantir que itens seja array
             if (!data.itens || !Array.isArray(data.itens)) {
                 data.itens = [];
             }
 
-            // Garantir que cliente existe
             if (!data.cliente) {
                 data.cliente = { id: 0, nome: 'Cliente não informado', telefone: '' };
             }
@@ -183,22 +172,20 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 setGeocodeError('Mapa indisponível para este endereço. Abra a navegação para visualizar.');
             }
         } catch (error) {
-            console.error('❌ Erro capturado no geocodeAddress:', error);
+            console.error('Erro capturado no geocodeAddress:', error);
             setGeocodeError('Erro ao buscar localização');
         } finally {
             setGeocoding(false);
         }
     };
 
-    // FUNÇÃO handleConfirmarEntrega
     const handleConfirmarEntrega = async () => {
         if (!pedido) return;
 
-        console.log('=== INICIANDO CONFIRMAÇÃO DE ENTREGA ===');
+        console.log('Iniciando confirmação de entrega');
         setConfirmingDelivery(true);
 
         try {
-            // 1. Verificar se há produtos com retorno de botija
             const produtosRetornaveis = pedido.itens.filter(item =>
                 item.retorna_botija &&
                 (item.categoria === 'botija_gas' || item.categoria === 'agua')
@@ -207,18 +194,14 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             console.log('Produtos retornáveis:', produtosRetornaveis);
 
             if (produtosRetornaveis.length === 0) {
-                // Não há produtos retornáveis, confirmar direto
                 await confirmarSemCascos();
                 return;
             }
 
-            // 2. Buscar cascos disponíveis para cada produto
             const cascosMap = await gruposService.buscarCascosDisponiveis(produtosRetornaveis);
             console.log('Cascos disponíveis:', cascosMap);
 
-            // 3. Verificar se todos os produtos têm apenas 1 casco
             let todosTemUmCasco = true;
-            // MUDAR O TIPO AQUI - usar string como chave
             const cascosAutomaticos: { [key: string]: Array<{ casco_id: number, quantidade: number }> } = {};
 
             for (const produto of produtosRetornaveis) {
@@ -231,7 +214,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                     todosTemUmCasco = false;
                     break;
                 } else if (cascosDesteProduto.length === 1) {
-                    // Atribuir automaticamente - USAR STRING como chave
                     cascosAutomaticos[produto.produto_id.toString()] = [{
                         casco_id: cascosDesteProduto[0].id,
                         quantidade: produto.quantidade || 0
@@ -244,18 +226,14 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 }
             }
 
-            // 4. Decidir fluxo
             if (todosTemUmCasco && Object.keys(cascosAutomaticos).length === produtosRetornaveis.length) {
-                // Confirmar automaticamente com cascos selecionados
                 console.log('Confirmando automaticamente com cascos:', cascosAutomaticos);
                 await confirmarComCascos(cascosAutomaticos);
             } else {
-                // Abrir modal para seleção manual
                 console.log('Abrindo modal para seleção manual');
                 setProdutosComRetorno(produtosRetornaveis);
                 setCascosDisponiveis(cascosMap);
 
-                // Inicializar quantidades zeradas
                 const quantidadesIniciais: { [key: number]: { [casco_id: number]: number } } = {};
                 for (const produto of produtosRetornaveis) {
                     if (produto.produto_id) {
@@ -297,7 +275,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         }
     };
 
-    // CORRIGIR FUNÇÃO confirmarComCascos - MUDAR TIPO DO PARÂMETRO
     const confirmarComCascos = async (cascos: { [key: string]: Array<{ casco_id: number, quantidade: number }> }) => {
         try {
             await pedidosService.confirmarEntrega({
@@ -329,7 +306,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             const quantidadesProdutoAtual = { ...(quantidadesAtuais[produtoId] || {}) };
             const quantidadeCascoAtual = quantidadesProdutoAtual[cascoId] || 0;
 
-            // Calcula o total já selecionado para este produto, excluindo o casco atual
             let totalSelecionadoAtual = 0;
             for (const id in quantidadesProdutoAtual) {
                 if (parseInt(id) !== cascoId) {
@@ -337,17 +313,13 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                 }
             }
 
-            // Calcula a nova quantidade para o casco que está sendo alterado
             let novaQuantidadeCasco = quantidadeCascoAtual + delta;
 
-            // Garante que não seja menor que 0
             if (novaQuantidadeCasco < 0) {
                 novaQuantidadeCasco = 0;
             }
 
-            // Garante que a soma não ultrapasse o total requerido
             if (totalSelecionadoAtual + novaQuantidadeCasco > quantidadeRequerida) {
-                // Se tentou incrementar além do limite, apenas retorna o estado anterior
                 return prev;
             }
 
@@ -371,14 +343,12 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         return true;
     };
 
-    // CORRIGIR FUNÇÃO confirmarEntregaComCascosModal
     const confirmarEntregaComCascosModal = async () => {
         if (!verificarSelecaoCompleta()) {
             Alert.alert('Atenção', 'Complete a seleção de cascos para todos os produtos');
             return;
         }
 
-        // Preparar dados - USAR STRING como chave
         const cascos: { [key: string]: Array<{ casco_id: number, quantidade: number }> } = {};
 
         for (const produto of produtosComRetorno) {
@@ -396,7 +366,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             });
 
             if (cascosComQuantidade.length > 0) {
-                // USAR STRING como chave
                 cascos[produto.produto_id.toString()] = cascosComQuantidade;
             }
         }
@@ -429,10 +398,13 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#1976d2" />
+            <LinearGradient
+                colors={['#1565c0', '#1976d2', '#42a5f5']}
+                style={styles.loadingContainer}
+            >
+                <ActivityIndicator size="large" color="#fff" />
                 <Text style={styles.loadingText}>Carregando detalhes...</Text>
-            </View>
+            </LinearGradient>
         );
     }
 
@@ -448,24 +420,36 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={26} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Detalhes do Pedido</Text>
+                <View style={styles.headerTitleContainer}>
+                    <Text style={styles.headerTitle}>Detalhes do Pedido</Text>
+                </View>
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.statusCard}>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(pedido.status) }]}>
-                        <Text style={styles.statusText}>{getStatusLabel(pedido.status)}</Text>
-                    </View>
+            <View style={styles.statusCard}>
+                <View style={styles.pedidoInfoRow}>
                     <Text style={styles.pedidoId}>Pedido #{pedido.id}</Text>
                     <Text style={styles.pedidoData}>{formatDate(pedido.criado_em)}</Text>
                 </View>
+                <LinearGradient
+                    colors={[getStatusColor(pedido.status), getStatusColor(pedido.status) + 'dd']}
+                    style={styles.statusBadge}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                >
+                    <Text style={styles.statusText}>{getStatusLabel(pedido.status)}</Text>
+                </LinearGradient>
+            </View>
+
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Ionicons name="person" size={20} color="#1976d2" />
+                        <View style={styles.iconCircle}>
+                            <Ionicons name="person" size={20} color="#1976d2" />
+                        </View>
                         <Text style={styles.sectionTitle}>Cliente</Text>
                     </View>
                     <Text style={styles.clienteNome}>{pedido.cliente.nome}</Text>
@@ -483,7 +467,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                             const criacao = new Date(pedido.criado_em);
                             const diffDias = Math.floor((agora.getTime() - criacao.getTime()) / (1000 * 60 * 60 * 24));
 
-                            // Se passou mais de 30 dias, mostrar apenas a data
                             if (diffDias > 30) {
                                 return (
                                     <View style={styles.tempoEsperaContainer}>
@@ -508,7 +491,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Ionicons name="location" size={20} color="#1976d2" />
+                        <View style={styles.iconCircle}>
+                            <Ionicons name="location" size={20} color="#1976d2" />
+                        </View>
                         <Text style={styles.sectionTitle}>Endereço de Entrega</Text>
                     </View>
                     <Text style={styles.enderecoText}>{pedido.endereco_entrega}</Text>
@@ -516,10 +501,17 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                     <TouchableOpacity
                         style={styles.navegacaoButton}
                         onPress={abrirNavegacao}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                     >
-                        <Ionicons name="navigate" size={20} color="#fff" />
-                        <Text style={styles.navegacaoButtonText}>Abrir Navegação</Text>
+                        <LinearGradient
+                            colors={['#4caf50', '#388e3c']}
+                            style={styles.navegacaoButtonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Ionicons name="navigate" size={22} color="#fff" />
+                            <Text style={styles.navegacaoButtonText}>Abrir Navegação</Text>
+                        </LinearGradient>
                     </TouchableOpacity>
 
                     {geocoding && (
@@ -550,7 +542,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Ionicons name="cube" size={20} color="#1976d2" />
+                        <View style={styles.iconCircle}>
+                            <Ionicons name="cube" size={20} color="#1976d2" />
+                        </View>
                         <Text style={styles.sectionTitle}>Itens do Pedido</Text>
                     </View>
                     {pedido.itens && Array.isArray(pedido.itens) && pedido.itens.length > 0 ? (
@@ -592,36 +586,43 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                             <Text style={styles.totalLabel}>Valor Total</Text>
                             <Text style={styles.totalValue}>{formatCurrency(pedido.valor_total)}</Text>
                         </View>
-                        <View style={[
-                            styles.statusPagamentoBadge,
-                            {
-                                backgroundColor: pedido.pagamento_realizado ? '#4caf50' : '#ff9800'
-                            }
-                        ]}>
+                        <LinearGradient
+                            colors={pedido.pagamento_realizado ? ['#4caf50', '#388e3c'] : ['#ff9800', '#f57c00']}
+                            style={styles.statusPagamentoBadge}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
                             <Text style={styles.statusPagamentoText}>
                                 {pedido.pagamento_realizado
                                     ? `Pago - ${pedido.forma_pagamento || 'N/A'}`
                                     : 'Aguardando Pagamento'}
                             </Text>
-                        </View>
+                        </LinearGradient>
                     </View>
                 </View>
 
                 {canConfirmDelivery && (
                     <TouchableOpacity
-                        style={[styles.confirmarButton, confirmingDelivery && styles.confirmarButtonDisabled]}
+                        style={[styles.confirmarButton, confirmingDelivery && styles.buttonDisabled]}
                         onPress={handleConfirmarEntrega}
                         disabled={confirmingDelivery}
-                        activeOpacity={0.8}
+                        activeOpacity={0.9}
                     >
-                        {confirmingDelivery ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <>
-                                <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                                <Text style={styles.confirmarButtonText}>Confirmar Entrega</Text>
-                            </>
-                        )}
+                        <LinearGradient
+                            colors={confirmingDelivery ? ['#ccc', '#999'] : ['#4caf50', '#388e3c', '#2e7d32']}
+                            style={styles.confirmarButtonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            {confirmingDelivery ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <>
+                                    <Ionicons name="checkmark-circle" size={26} color="#fff" />
+                                    <Text style={styles.confirmarButtonText}>Confirmar Entrega</Text>
+                                </>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
                 )}
 
@@ -636,12 +637,17 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContainer}>
-                        <View style={styles.modalHeader}>
+                        <LinearGradient
+                            colors={['#1565c0', '#1976d2']}
+                            style={styles.modalHeader}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
                             <Text style={styles.modalTitle}>Selecionar Cascos Devolvidos</Text>
                             <TouchableOpacity onPress={() => setCascoDialogOpen(false)}>
-                                <Ionicons name="close" size={24} color="#666" />
+                                <Ionicons name="close" size={26} color="#fff" />
                             </TouchableOpacity>
-                        </View>
+                        </LinearGradient>
 
                         <ScrollView style={styles.modalContent}>
                             <Text style={styles.modalSubtitle}>
@@ -679,7 +685,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                                                                 onPress={() => handleIncrementoCasco(produto, casco.id, -1)}
                                                                 disabled={desabilitarMenos}
                                                             >
-                                                                <Ionicons name="remove" size={20} color="#1976d2" />
+                                                                <Ionicons name="remove" size={20} color={desabilitarMenos ? '#ccc' : '#1976d2'} />
                                                             </TouchableOpacity>
 
                                                             <Text style={styles.quantityValue}>{quantidadeAtual}</Text>
@@ -689,7 +695,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                                                                 onPress={() => handleIncrementoCasco(produto, casco.id, 1)}
                                                                 disabled={desabilitarMais}
                                                             >
-                                                                <Ionicons name="add" size={20} color="#1976d2" />
+                                                                <Ionicons name="add" size={20} color={desabilitarMais ? '#ccc' : '#1976d2'} />
                                                             </TouchableOpacity>
                                                         </View>
                                                     </View>
@@ -703,25 +709,28 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
                         <View style={styles.modalFooter}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
+                                style={[styles.modalButton, styles.cancelModalButton]}
                                 onPress={() => setCascoDialogOpen(false)}
                             >
-                                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                                <Text style={styles.cancelModalButtonText}>Cancelar</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[
-                                    styles.modalButton,
-                                    styles.confirmButton,
-                                    !verificarSelecaoCompleta() && styles.buttonDisabled
-                                ]}
+                                style={[styles.modalButton, styles.confirmModalButton]}
                                 onPress={confirmarEntregaComCascosModal}
                                 disabled={!verificarSelecaoCompleta() || confirmingDelivery}
                             >
-                                {confirmingDelivery ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={styles.confirmButtonText}>Confirmar Entrega</Text>
-                                )}
+                                <LinearGradient
+                                    colors={(!verificarSelecaoCompleta() || confirmingDelivery) ? ['#ccc', '#999'] : ['#4caf50', '#388e3c']}
+                                    style={styles.confirmModalButtonGradient}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                >
+                                    {confirmingDelivery ? (
+                                        <ActivityIndicator color="#fff" size="small" />
+                                    ) : (
+                                        <Text style={styles.confirmModalButtonText}>Confirmar Entrega</Text>
+                                    )}
+                                </LinearGradient>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -740,12 +749,12 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
     },
     loadingText: {
-        marginTop: 12,
-        fontSize: 16,
-        color: '#666',
+        marginTop: 16,
+        fontSize: 18,
+        color: '#fff',
+        fontWeight: '600',
     },
     header: {
         backgroundColor: '#1976d2',
@@ -759,10 +768,18 @@ const styles = StyleSheet.create({
     backButton: {
         padding: 4,
     },
+    headerTitleContainer: {
+        alignItems: 'center',
+    },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 'bold',
         color: '#fff',
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#e3f2fd',
+        marginTop: 4,
     },
     content: {
         flex: 1,
@@ -772,7 +789,8 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginTop: -10,
         marginBottom: 16,
-        padding: 20,
+        paddingVertical: 16,
+        paddingHorizontal: 20,
         borderRadius: 12,
         alignItems: 'center',
         shadowColor: '#000',
@@ -781,107 +799,135 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
     },
-    statusBadge: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 16,
+    pedidoInfoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
         marginBottom: 12,
-    },
-    statusText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
     },
     pedidoId: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 4,
     },
     pedidoData: {
-        fontSize: 14,
-        color: '#666',
+        fontSize: 16,
+        color: '#333',
+        fontWeight: '500',
+    },
+    statusBadge: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    statusText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     section: {
         backgroundColor: '#fff',
         marginHorizontal: 16,
-        marginBottom: 12,
-        padding: 16,
-        borderRadius: 12,
+        marginBottom: 16,
+        padding: 20,
+        borderRadius: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        elevation: 4,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
+    },
+    iconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#e3f2fd',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
     },
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: '700',
         color: '#333',
-        marginLeft: 8,
+        letterSpacing: 0.3,
     },
     clienteNome: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 8,
+        marginBottom: 10,
     },
     telefoneRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        backgroundColor: '#e3f2fd',
+        borderRadius: 10,
+        marginTop: 4,
     },
     telefoneText: {
         fontSize: 16,
         color: '#1976d2',
-        marginLeft: 8,
-        textDecorationLine: 'underline',
+        marginLeft: 10,
+        fontWeight: '600',
     },
     enderecoText: {
         fontSize: 15,
         color: '#333',
-        lineHeight: 22,
+        lineHeight: 24,
+        marginBottom: 12,
     },
     geocodingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 12,
-        padding: 12,
+        marginTop: 16,
+        padding: 14,
         backgroundColor: '#e3f2fd',
-        borderRadius: 8,
+        borderRadius: 12,
     },
     geocodingText: {
-        marginLeft: 8,
+        marginLeft: 10,
         fontSize: 14,
         color: '#1976d2',
+        fontWeight: '500',
     },
     errorContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 12,
-        padding: 12,
+        marginTop: 16,
+        padding: 14,
         backgroundColor: '#ffebee',
-        borderRadius: 8,
+        borderRadius: 12,
     },
     errorText: {
-        marginLeft: 8,
+        marginLeft: 10,
         fontSize: 14,
         color: '#f44336',
         flex: 1,
+        fontWeight: '500',
     },
     mapContainer: {
-        marginTop: 12,
+        marginTop: 16,
     },
     itemRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
     },
@@ -890,29 +936,34 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     itemNome: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
         color: '#333',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     itemQtd: {
         fontSize: 14,
         color: '#666',
+        marginBottom: 4,
     },
     botijaTag: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 6,
+        backgroundColor: '#fff3e0',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
         alignSelf: 'flex-start',
     },
     botijaText: {
         fontSize: 12,
         color: '#ff9800',
         marginLeft: 4,
-        fontWeight: '500',
+        fontWeight: '600',
     },
     itemValor: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#1976d2',
     },
@@ -920,13 +971,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         marginHorizontal: 16,
         marginBottom: 16,
-        padding: 20,
-        borderRadius: 12,
+        padding: 24,
+        borderRadius: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 6,
     },
     totalContent: {
         flex: 1,
@@ -935,7 +986,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
     },
     totalLabel: {
         fontSize: 18,
@@ -943,156 +994,138 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     totalValue: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#1976d2',
-    },
-    confirmarButton: {
-        backgroundColor: '#4caf50',
-        marginHorizontal: 16,
-        marginBottom: Platform.OS === 'android' ? 30 : 0,
-        padding: 16,
-        borderRadius: 12,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    confirmarButtonDisabled: {
-        opacity: 0.6,
-    },
-    confirmarButtonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginLeft: 8,
+        letterSpacing: 0.5,
     },
     navegacaoButton: {
-        backgroundColor: '#4caf50',
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginTop: 12,
+        shadowColor: '#4caf50',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    navegacaoButtonGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
+        paddingVertical: 14,
         paddingHorizontal: 20,
-        borderRadius: 8,
-        marginTop: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 3,
     },
     navegacaoButtonText: {
         color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
+        fontSize: 17,
+        fontWeight: '700',
+        marginLeft: 10,
+        letterSpacing: 0.3,
+    },
+    confirmarButton: {
+        marginHorizontal: 16,
+        marginBottom: Platform.OS === 'android' ? 30 : 0,
+        borderRadius: 14,
+        overflow: 'hidden',
+        shadowColor: '#4caf50',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 8,
+    },
+    confirmarButtonGradient: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 18,
+        paddingHorizontal: 24,
+    },
+    confirmarButtonText: {
+        color: '#fff',
+        fontSize: 19,
+        fontWeight: 'bold',
+        marginLeft: 10,
+        letterSpacing: 0.5,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
+        shadowOpacity: 0.1,
+        elevation: 2,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
         justifyContent: 'flex-end',
     },
     modalContainer: {
         backgroundColor: '#fff',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: '80%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        maxHeight: '85%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 10,
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
     },
     modalTitle: {
-        fontSize: 18,
+        fontSize: 19,
         fontWeight: 'bold',
-        color: '#333',
+        color: '#fff',
+        flex: 1,
+        letterSpacing: 0.3,
     },
     modalContent: {
-        padding: 16,
+        padding: 20,
     },
     modalSubtitle: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#666',
-        marginBottom: 16,
+        marginBottom: 20,
+        lineHeight: 22,
     },
     produtoCard: {
         backgroundColor: '#f9f9f9',
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: 12,
+        padding: 18,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
     },
     produtoNome: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: 'bold',
-        marginBottom: 4,
+        marginBottom: 6,
+        color: '#333',
     },
     produtoInfo: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#666',
-        marginBottom: 12,
+        marginBottom: 14,
     },
     cascoItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
-        paddingVertical: 8,
+        marginBottom: 10,
+        paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#e0e0e0',
     },
     cascoNome: {
         flex: 1,
-        fontSize: 14,
-    },
-    quantityInput: {
-        width: 60,
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 4,
-        padding: 8,
-        textAlign: 'center',
-    },
-    modalFooter: {
-        flexDirection: 'row',
-        padding: 16,
-        paddingBottom: Platform.OS === 'android' ? 30 : 16,
-        gap: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#eee',
-    },
-    modalButton: {
-        flex: 1,
-        padding: 14,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ccc',
-    },
-    cancelButtonText: {
-        color: '#666',
-        fontWeight: '600',
-    },
-    confirmButton: {
-        backgroundColor: '#4caf50',
-    },
-    confirmButtonText: {
-        color: '#fff',
-        fontWeight: '600',
-    },
-    buttonDisabled: {
-        opacity: 0.5,
+        fontSize: 15,
+        color: '#333',
+        fontWeight: '500',
     },
     quantitySelector: {
         flexDirection: 'row',
@@ -1100,50 +1133,106 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     quantityButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#e3f2fd',
         justifyContent: 'center',
         alignItems: 'center',
-        marginHorizontal: 8,
+        marginHorizontal: 10,
+        shadowColor: '#1976d2',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+        elevation: 2,
     },
     quantityButtonDisabled: {
         backgroundColor: '#f5f5f5',
         opacity: 0.5,
+        shadowOpacity: 0,
+        elevation: 0,
     },
     quantityValue: {
-        fontSize: 18,
+        fontSize: 19,
         fontWeight: 'bold',
         color: '#333',
-        minWidth: 30,
+        minWidth: 32,
         textAlign: 'center',
+    },
+    modalFooter: {
+        flexDirection: 'row',
+        padding: 20,
+        paddingBottom: Platform.OS === 'android' ? 30 : 20,
+        gap: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+    },
+    modalButton: {
+        flex: 1,
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    cancelModalButton: {
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#ccc',
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelModalButtonText: {
+        color: '#666',
+        fontWeight: '700',
+        fontSize: 16,
+    },
+    confirmModalButton: {
+        shadowColor: '#4caf50',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    confirmModalButtonGradient: {
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmModalButtonText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 16,
     },
     tempoEsperaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
-        marginTop: 4,
+        paddingVertical: 10,
         paddingHorizontal: 12,
+        marginTop: 8,
         backgroundColor: '#fff3e0',
-        borderRadius: 8,
+        borderRadius: 10,
     },
     tempoEsperaText: {
         fontSize: 14,
         color: '#ff9800',
-        marginLeft: 8,
+        marginLeft: 10,
         fontWeight: '600',
     },
     statusPagamentoBadge: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 8,
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
         alignSelf: 'flex-start',
         marginTop: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     statusPagamentoText: {
         color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 15,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
 });
