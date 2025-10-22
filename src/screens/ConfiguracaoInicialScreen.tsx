@@ -7,8 +7,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Image,
 } from "react-native";
@@ -55,7 +53,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     try {
       new URL(normalizedUrl);
       return { valida: true, mensagem: "" };
-    } catch (error) {
+    } catch (_error) {
       return {
         valida: false,
         mensagem: "URL inválida. Verifique o formato do endereço",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Modal,
   View,
@@ -37,22 +37,7 @@ export default function SelecionarCascosModal({
   const [cascos, setCascos] = useState<CascoOpcao[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    console.log("Modal visível:", visible);
-    console.log("Grupos com retorno (tamanho):", gruposComRetorno.size);
-    console.log(
-      "Grupos com retorno (detalhes):",
-      Array.from(gruposComRetorno.entries()),
-    );
-
-    if (visible && gruposComRetorno.size > 0) {
-      carregarCascos();
-    } else if (visible && gruposComRetorno.size === 0) {
-      console.warn("⚠️ Modal aberto mas nenhum grupo encontrado!");
-    }
-  }, [visible, pedidoId, gruposComRetorno]);
-
-  const carregarCascos = async () => {
+  const carregarCascos = useCallback(async () => {
     setLoading(true);
     console.log("=== CARREGANDO CASCOS ===");
     console.log("Grupos para processar:", gruposComRetorno.size);
@@ -111,8 +96,8 @@ export default function SelecionarCascosModal({
       }
 
       setCascos(todasOpcoes);
-    } catch (error) {
-      console.error("❌ Erro ao carregar cascos:", error);
+    } catch (_error) {
+      console.error("❌ Erro ao carregar cascos:", _error);
       Alert.alert(
         "Erro",
         "Não foi possível carregar as opções de cascos. Tente novamente.",
@@ -121,7 +106,22 @@ export default function SelecionarCascosModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [gruposComRetorno, onCancel]);
+
+  useEffect(() => {
+    console.log("Modal visível:", visible);
+    console.log("Grupos com retorno (tamanho):", gruposComRetorno.size);
+    console.log(
+      "Grupos com retorno (detalhes):",
+      Array.from(gruposComRetorno.entries()),
+    );
+
+    if (visible && gruposComRetorno.size > 0) {
+      carregarCascos();
+    } else if (visible && gruposComRetorno.size === 0) {
+      console.warn("⚠️ Modal aberto mas nenhum grupo encontrado!");
+    }
+  }, [visible, gruposComRetorno, carregarCascos]);
 
   const toggleCasco = (cascoId: number) => {
     console.log("Alternando seleção do casco:", cascoId);

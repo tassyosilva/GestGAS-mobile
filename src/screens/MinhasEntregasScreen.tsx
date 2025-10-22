@@ -40,36 +40,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const limit = 20;
   const limitFinalizados = 10;
 
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  // ATUALIZADO: Este useEffect agora carrega os dados iniciais
-  useEffect(() => {
-    if (user) {
-      loadPedidos();
-      loadTotalFinalizados(); // ADICIONADO: Carrega o total ao iniciar
-    }
-  }, [user, page]);
-
-  useEffect(() => {
-    if (user && pageFinalizados > 0) {
-      loadPedidosFinalizados();
-    }
-  }, [pageFinalizados]);
-
-  const loadUser = async () => {
-    try {
-      const userData = await authService.getUser();
-      setUser(userData);
-    } catch (error) {
-      console.error("Erro ao carregar usuário:", error);
-      Alert.alert("Erro", "Não foi possível carregar dados do usuário");
-    }
-  };
-
-  // Função leve para buscar apenas o total de finalizados
-  const loadTotalFinalizados = async () => {
+  const loadTotalFinalizados = useCallback(async () => {
     if (!user) return;
     try {
       const response = await pedidosService.listarPedidosFinalizados({
@@ -82,13 +53,13 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       } else {
         setTotalFinalizados(0);
       }
-    } catch (error) {
-      console.error("Erro ao carregar total de finalizados:", error);
+    } catch (_error) {
+      console.error("Erro ao carregar total de finalizados:", _error);
       setTotalFinalizados(0);
     }
-  };
+  }, [user]);
 
-  const loadPedidos = async () => {
+  const loadPedidos = useCallback(async () => {
     if (!user) return;
     try {
       if (page === 0) setLoading(true);
@@ -130,9 +101,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user, page, onLogout]);
 
-  const loadPedidosFinalizados = async () => {
+  const loadPedidosFinalizados = useCallback(async () => {
     if (!user || loadingFinalizados) return;
     try {
       setLoadingFinalizados(true);
@@ -172,14 +143,42 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         setPedidosFinalizados([]);
         setTotalFinalizados(0);
       }
-    } catch (error: any) {
-      console.error("Erro ao carregar pedidos finalizados:", error);
+    } catch (_error: any) {
+      console.error("Erro ao carregar pedidos finalizados:", _error);
       if (pageFinalizados === 0) {
         setPedidosFinalizados([]);
         setTotalFinalizados(0);
       }
     } finally {
       setLoadingFinalizados(false);
+    }
+  }, [user, loadingFinalizados, pageFinalizados, limitFinalizados]);
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  // ATUALIZADO: Este useEffect agora carrega os dados iniciais
+  useEffect(() => {
+    if (user) {
+      loadPedidos();
+      loadTotalFinalizados();
+    }
+  }, [user, page, loadPedidos, loadTotalFinalizados]);
+
+  useEffect(() => {
+    if (user && pageFinalizados > 0) {
+      loadPedidosFinalizados();
+    }
+  }, [user, pageFinalizados, loadPedidosFinalizados]);
+
+  const loadUser = async () => {
+    try {
+      const userData = await authService.getUser();
+      setUser(userData);
+    } catch (error) {
+      console.error("Erro ao carregar usuário:", error);
+      Alert.alert("Erro", "Não foi possível carregar dados do usuário");
     }
   };
 

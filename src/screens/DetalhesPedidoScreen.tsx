@@ -288,8 +288,8 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
       try {
         await Linking.openURL(opcoes[1].webUrl);
-      } catch (error) {
-        console.error("Erro ao abrir qualquer opção:", error);
+      } catch (_error) {
+        console.error("Erro ao abrir qualquer opção:", _error);
         Alert.alert("Erro", "Não foi possível abrir o aplicativo de navegação");
       }
     };
@@ -309,8 +309,8 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
           "Mapa indisponível para este endereço. Abra a navegação para visualizar.",
         );
       }
-    } catch (error) {
-      console.error("Erro capturado no geocodeAddress:", error);
+    } catch (_error) {
+      console.error("Erro capturado no geocodeAddress:", _error);
       setGeocodeError("Erro ao buscar localização");
     } finally {
       setGeocoding(false);
@@ -551,26 +551,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     setConfirmingDelivery(true);
 
     await confirmarComCascos(cascos);
-  };
-
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      em_entrega: "#2196f3",
-      entregue: "#4caf50",
-      pendente: "#ff9800",
-      cancelado: "#f44336",
-    };
-    return colors[status] || "#999";
-  };
-
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      em_entrega: "Em Entrega",
-      entregue: "Entregue",
-      pendente: "Pendente",
-      cancelado: "Cancelado",
-    };
-    return labels[status] || status;
   };
 
   if (loading) {
