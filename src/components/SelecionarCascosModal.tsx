@@ -21,7 +21,6 @@ interface CascoOpcao {
 
 interface Props {
   visible: boolean;
-  pedidoId: number;
   gruposComRetorno: Map<number, any[]>;
   onConfirm: (cascosSelecionados: number[]) => void;
   onCancel: () => void;
@@ -29,7 +28,6 @@ interface Props {
 
 export default function SelecionarCascosModal({
   visible,
-  pedidoId,
   gruposComRetorno,
   onConfirm,
   onCancel,

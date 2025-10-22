@@ -53,7 +53,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     try {
       new URL(normalizedUrl);
       return { valida: true, mensagem: "" };
-    } catch (_error) {
+    } catch {
       return {
         valida: false,
         mensagem: "URL inválida. Verifique o formato do endereço",

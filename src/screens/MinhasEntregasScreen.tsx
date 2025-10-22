@@ -182,7 +182,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     }
   };
 
-  // ATUALIZADO: onRefresh agora também atualiza o total
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setPage(0);
@@ -190,12 +189,18 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     setPedidosFinalizados([]);
 
     loadPedidos();
-    loadTotalFinalizados(); // ADICIONADO: Atualiza o total ao arrastar
+    loadTotalFinalizados();
 
     if (showFinalizados) {
       loadPedidosFinalizados();
     }
-  }, [user, showFinalizados]);
+  }, [
+    user,
+    showFinalizados,
+    loadPedidos,
+    loadTotalFinalizados,
+    loadPedidosFinalizados,
+  ]);
 
   const handlePedidoPress = (pedido: Pedido) => {
     navigation.navigate("DetalhesPedido", { pedidoId: pedido.id });
