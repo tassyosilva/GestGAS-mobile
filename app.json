@@ -11,9 +11,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#1976d2"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gestgas.entregas"

@@ -1,222 +1,237 @@
-import React from 'react';
+import React from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Pedido } from '../types';
-import { formatCurrency, formatDate, calcularTempoEspera } from '../utils/formatters';
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Pedido } from "../types";
+import {
+  formatCurrency,
+  formatDate,
+  calcularTempoEspera,
+} from "../utils/formatters";
 
 interface Props {
-    pedido: Pedido;
-    onPress: () => void;
+  pedido: Pedido;
+  onPress: () => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
-    'em_entrega': '#2196f3',
-    'entregue': '#4caf50',
-    'pendente': '#ff9800',
-    'cancelado': '#f44336',
+  em_entrega: "#2196f3",
+  entregue: "#4caf50",
+  pendente: "#ff9800",
+  cancelado: "#f44336",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-    'em_entrega': 'Em Entrega',
-    'entregue': 'Entregue',
-    'pendente': 'Pendente',
-    'cancelado': 'Cancelado',
+  em_entrega: "Em Entrega",
+  entregue: "Entregue",
+  pendente: "Pendente",
+  cancelado: "Cancelado",
 };
 
-const getStatusPagamentoInfo = (pagamentoRealizado?: boolean, formaPagamento?: string) => {
-    if (pagamentoRealizado) {
-        return {
-            label: `Pago - ${formaPagamento || 'N/A'}`,
-            color: '#4caf50'
-        };
-    } else {
-        return {
-            label: 'Aguardando Pagamento',
-            color: '#ff9800'
-        };
-    }
+const getStatusPagamentoInfo = (
+  pagamentoRealizado?: boolean,
+  formaPagamento?: string,
+) => {
+  if (pagamentoRealizado) {
+    return {
+      label: `Pago - ${formaPagamento || "N/A"}`,
+      color: "#4caf50",
+    };
+  } else {
+    return {
+      label: "Aguardando Pagamento",
+      color: "#ff9800",
+    };
+  }
 };
 
 export default function PedidoCard({ pedido, onPress }: Props) {
-    const statusColor = STATUS_COLORS[pedido.status] || '#999';
-    const statusLabel = STATUS_LABELS[pedido.status] || pedido.status;
-    const tempoEspera = calcularTempoEspera(pedido.criado_em);
-    const statusPagamento = getStatusPagamentoInfo(pedido.pagamento_realizado, pedido.forma_pagamento);
+  const statusColor = STATUS_COLORS[pedido.status] || "#999";
+  const statusLabel = STATUS_LABELS[pedido.status] || pedido.status;
+  const tempoEspera = calcularTempoEspera(pedido.criado_em);
+  const statusPagamento = getStatusPagamentoInfo(
+    pedido.pagamento_realizado,
+    pedido.forma_pagamento,
+  );
 
-    return (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={onPress}
-            activeOpacity={0.7}
-        >
-            <View style={styles.cardHeader}>
-                <View style={styles.clienteInfo}>
-                    <Ionicons name="person-outline" size={18} color="#1976d2" />
-                    <View style={styles.clienteInfoTexto}>
-                        <Text style={styles.clienteNome} numberOfLines={1}>
-                            {pedido.cliente.nome}
-                        </Text>
-                        {pedido.status === 'em_entrega' && (
-                            <Text style={styles.tempoEspera} numberOfLines={1}>
-                                {tempoEspera}
-                            </Text>
-                        )}
-                    </View>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.statusText}>{statusLabel}</Text>
-                </View>
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.cardHeader}>
+        <View style={styles.clienteInfo}>
+          <Ionicons name="person-outline" size={18} color="#1976d2" />
+          <View style={styles.clienteInfoTexto}>
+            <Text style={styles.clienteNome} numberOfLines={1}>
+              {pedido.cliente.nome}
+            </Text>
+            {pedido.status === "em_entrega" && (
+              <Text style={styles.tempoEspera} numberOfLines={1}>
+                {tempoEspera}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.statusText}>{statusLabel}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardBody}>
+        <View style={styles.infoRow}>
+          <Ionicons name="location-outline" size={16} color="#666" />
+          <Text style={styles.infoText} numberOfLines={2}>
+            {pedido.endereco_entrega}
+          </Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Ionicons name="call-outline" size={16} color="#666" />
+          <Text style={styles.infoText}>{pedido.cliente.telefone}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Ionicons name="calendar-outline" size={16} color="#666" />
+          <Text style={styles.infoText}>{formatDate(pedido.criado_em)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <View style={styles.valorContainer}>
+          <View>
+            <View style={styles.valorRow}>
+              <Text style={styles.valorLabel}>Valor Total:</Text>
+              <Text style={styles.valorText}>
+                {formatCurrency(pedido.valor_total)}
+              </Text>
             </View>
-
-            <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                    <Ionicons name="location-outline" size={16} color="#666" />
-                    <Text style={styles.infoText} numberOfLines={2}>
-                        {pedido.endereco_entrega}
-                    </Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                    <Ionicons name="call-outline" size={16} color="#666" />
-                    <Text style={styles.infoText}>{pedido.cliente.telefone}</Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                    <Text style={styles.infoText}>{formatDate(pedido.criado_em)}</Text>
-                </View>
+            <View style={styles.statusPagamentoContainer}>
+              <View
+                style={[
+                  styles.statusPagamentoBadge,
+                  { backgroundColor: statusPagamento.color },
+                ]}
+              >
+                <Text style={styles.statusPagamentoText}>
+                  {statusPagamento.label}
+                </Text>
+              </View>
             </View>
-
-            <View style={styles.cardFooter}>
-                <View style={styles.valorContainer}>
-                    <View>
-                        <View style={styles.valorRow}>
-                            <Text style={styles.valorLabel}>Valor Total:</Text>
-                            <Text style={styles.valorText}>{formatCurrency(pedido.valor_total)}</Text>
-                        </View>
-                        <View style={styles.statusPagamentoContainer}>
-                            <View style={[styles.statusPagamentoBadge, { backgroundColor: statusPagamento.color }]}>
-                                <Text style={styles.statusPagamentoText}>{statusPagamento.label}</Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-                <Ionicons name="chevron-forward" size={24} color="#1976d2" />
-            </View>
-        </TouchableOpacity>
-    );
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color="#1976d2" />
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    clienteInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        marginRight: 8,
-    },
-    clienteNome: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-        marginLeft: 6,
-        flex: 1,
-    },
-    statusBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    statusText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    cardBody: {
-        marginBottom: 12,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 8,
-    },
-    infoText: {
-        fontSize: 14,
-        color: '#666',
-        marginLeft: 8,
-        flex: 1,
-    },
-    cardFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-    },
-    valorContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    valorLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginRight: 6,
-    },
-    valorText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1976d2',
-    },
-    clienteInfoTexto: {
-        marginLeft: 6,
-        flex: 1,
-    },
-    tempoEspera: {
-        fontSize: 11,
-        color: '#ff9800',
-        marginTop: 2,
-        fontWeight: '600',
-    },
-    statusPagamentoContainer: {
-        marginTop: 6,
-    },
-    statusPagamentoBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
-    },
-    statusPagamentoText: {
-        color: '#fff',
-        fontSize: 11,
-        fontWeight: '600',
-    },
-    valorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  clienteInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
+  clienteNome: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginLeft: 6,
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  cardBody: {
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#666",
+    marginLeft: 8,
+    flex: 1,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  valorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  valorLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginRight: 6,
+  },
+  valorText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1976d2",
+  },
+  clienteInfoTexto: {
+    marginLeft: 6,
+    flex: 1,
+  },
+  tempoEspera: {
+    fontSize: 11,
+    color: "#ff9800",
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  statusPagamentoContainer: {
+    marginTop: 6,
+  },
+  statusPagamentoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  statusPagamentoText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  valorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
 });

@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import ConfiguracaoInicialScreen from './src/screens/ConfiguracaoInicialScreen';
-import PinScreen from './src/screens/PinScreen';
-import MinhasEntregasScreen from './src/screens/MinhasEntregasScreen';
-import DetalhesPedidoScreen from './src/screens/DetalhesPedidoScreen';
-import { authService } from './src/services/authService';
-import { storageService } from './src/services/storageService';
-import { Alert } from 'react-native';
+import React, { useState, useEffect } from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import ConfiguracaoInicialScreen from "./src/screens/ConfiguracaoInicialScreen";
+import PinScreen from "./src/screens/PinScreen";
+import MinhasEntregasScreen from "./src/screens/MinhasEntregasScreen";
+import DetalhesPedidoScreen from "./src/screens/DetalhesPedidoScreen";
+import { authService } from "./src/services/authService";
+import { storageService } from "./src/services/storageService";
+import { Alert } from "react-native";
 
 const Stack = createNativeStackNavigator();
 
-type AppState = 'loading' | 'needsConfig' | 'needsPin' | 'createPin' | 'authenticated';
+type AppState =
+  | "loading"
+  | "needsConfig"
+  | "needsPin"
+  | "createPin"
+  | "authenticated";
 
 export default function App() {
-  const [appState, setAppState] = useState<AppState>('loading');
+  const [appState, setAppState] = useState<AppState>("loading");
 
   useEffect(() => {
     checkInitialState();
@@ -28,77 +33,77 @@ export default function App() {
       const hasCredentials = await storageService.getCredentials();
 
       if (!hasCredentials) {
-        setAppState('needsConfig');
+        setAppState("needsConfig");
       } else if (!hasPin) {
-        setAppState('createPin');
+        setAppState("createPin");
       } else {
-        setAppState('needsPin');
+        setAppState("needsPin");
       }
     } catch (error) {
-      console.error('Erro ao verificar estado inicial:', error);
-      setAppState('needsConfig');
+      console.error("Erro ao verificar estado inicial:", error);
+      setAppState("needsConfig");
     }
   };
 
   const handleConfigComplete = () => {
-    setAppState('createPin');
+    setAppState("createPin");
   };
 
   const handlePinCreated = () => {
-    setAppState('authenticated');
+    setAppState("authenticated");
   };
 
   const handlePinVerified = async () => {
     try {
       const success = await authService.loginWithCredentials();
       if (success) {
-        setAppState('authenticated');
+        setAppState("authenticated");
       } else {
         Alert.alert(
-          'Erro',
-          'Não foi possível fazer login. Suas credenciais podem estar inválidas.',
+          "Erro",
+          "Não foi possível fazer login. Suas credenciais podem estar inválidas.",
           [
             {
-              text: 'Reconfigurar',
-              onPress: handleForgotPin
-            }
-          ]
+              text: "Reconfigurar",
+              onPress: handleForgotPin,
+            },
+          ],
         );
       }
     } catch (error) {
-      console.error('Erro ao fazer login com PIN:', error);
+      console.error("Erro ao fazer login com PIN:", error);
       Alert.alert(
-        'Erro',
-        'Não foi possível fazer login. Verifique sua conexão.',
+        "Erro",
+        "Não foi possível fazer login. Verifique sua conexão.",
         [
           {
-            text: 'Tentar novamente',
-            onPress: () => setAppState('needsPin')
+            text: "Tentar novamente",
+            onPress: () => setAppState("needsPin"),
           },
           {
-            text: 'Reconfigurar',
-            onPress: handleForgotPin
-          }
-        ]
+            text: "Reconfigurar",
+            onPress: handleForgotPin,
+          },
+        ],
       );
     }
   };
 
   const handleForgotPin = () => {
     Alert.alert(
-      'Reconfigurar Acesso',
-      'Isso irá apagar seus dados salvos e você precisará configurar o acesso novamente. Deseja continuar?',
+      "Reconfigurar Acesso",
+      "Isso irá apagar seus dados salvos e você precisará configurar o acesso novamente. Deseja continuar?",
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Confirmar',
-          style: 'destructive',
+          text: "Confirmar",
+          style: "destructive",
           onPress: async () => {
             await storageService.clear();
-            setAppState('needsConfig');
-          }
-        }
-      ]
+            setAppState("needsConfig");
+          },
+        },
+      ],
     );
   };
 
@@ -106,20 +111,20 @@ export default function App() {
     await authService.logout();
     const hasPin = await storageService.hasPin();
     if (hasPin) {
-      setAppState('needsPin');
+      setAppState("needsPin");
     } else {
-      setAppState('needsConfig');
+      setAppState("needsConfig");
     }
   };
 
-  if (appState === 'loading') {
+  if (appState === "loading") {
     return null;
   }
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {appState === 'needsConfig' ? (
+        {appState === "needsConfig" ? (
           <Stack.Screen name="ConfiguracaoInicial">
             {(props) => (
               <ConfiguracaoInicialScreen
@@ -128,7 +133,7 @@ export default function App() {
               />
             )}
           </Stack.Screen>
-        ) : appState === 'createPin' ? (
+        ) : appState === "createPin" ? (
           <Stack.Screen name="CreatePin">
             {(props) => (
               <PinScreen
@@ -138,7 +143,7 @@ export default function App() {
               />
             )}
           </Stack.Screen>
-        ) : appState === 'needsPin' ? (
+        ) : appState === "needsPin" ? (
           <Stack.Screen name="VerifyPin">
             {(props) => (
               <PinScreen
@@ -153,10 +158,7 @@ export default function App() {
           <>
             <Stack.Screen name="MinhasEntregas">
               {(props) => (
-                <MinhasEntregasScreen
-                  {...props}
-                  onLogout={handleLogout}
-                />
+                <MinhasEntregasScreen {...props} onLogout={handleLogout} />
               )}
             </Stack.Screen>
             <Stack.Screen

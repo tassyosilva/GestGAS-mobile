@@ -2,9 +2,9 @@ name: OpenSSF Scorecard
 
 on:
   schedule:
-    - cron: '30 2 * * 1' # Roda toda segunda-feira às 02:30 UTC
+    - cron: "30 2 * * 1" # Roda toda segunda-feira às 02:30 UTC
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 permissions: # Permissões necessárias para a análise
   actions: read
