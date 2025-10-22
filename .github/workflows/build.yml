@@ -22,23 +22,20 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
+        # De volta ao npm install simples.
+        # Ele vai ler o package-lock.json (agora com eslint v8) e instalar TUDO.
         run: npm install
-        env:
-          NODE_ENV: development
 
       - name: Check Code Formatting
-        # Roda o verificador do Prettier diretamente.
-        # Ele vai falhar se o código não estiver formatado.
-        # (Este passo assume que o Prettier está nas suas devDependencies)
         run: npx prettier --check .
 
       - name: Lint Code
+        # Sem 'env:' A versão v8 instalada localmente será usada
+        # e encontrará o .eslintrc.js por padrão.
         run: npx eslint . --ext .ts,.tsx
 
       - name: Check TypeScript Types
-        # Este é o passo mais crítico. Continua o mesmo.
         run: npx tsc --noEmit
 
       - name: Run Security Audit
-        # Falhará se encontrar vulnerabilidades de nível ALTO ou CRÍTICO.
         run: npm audit --audit-level=high
