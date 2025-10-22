@@ -17,6 +17,7 @@ import { pedidosService } from "../services/pedidoService";
 import { Pedido, Usuario, PedidoResolvido } from "../types";
 import PedidoCard from "../components/PedidoCard";
 import { calcularTempoEntrega, formatShortDate } from "../utils/formatters";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   navigation: any;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
+  const insets = useSafeAreaInsets();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [pedidosFinalizados, setPedidosFinalizados] = useState<
     PedidoResolvido[]
@@ -380,7 +382,11 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       />
 
       <TouchableOpacity
-        style={styles.historicoButton}
+        // Modifique a prop style para usar um array e adicionar o padding dinâmico
+        style={[
+          styles.historicoButton,
+          { paddingBottom: styles.historicoButton.paddingBottom + insets.bottom } // Adiciona o inset ao padding original
+        ]}
         onPress={toggleFinalizados}
       >
         <Ionicons
@@ -470,7 +476,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    padding: 16,
+    padding: 7,
     alignItems: "center",
     borderRightWidth: 1,
     borderRightColor: "#f0f0f0",
@@ -485,6 +491,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
+    fontWeight: "bold",
     color: "#666",
     marginTop: 4,
     textAlign: "center",
@@ -517,16 +524,16 @@ const styles = StyleSheet.create({
   },
   historicoButton: {
     position: "absolute",
-    bottom: Platform.OS === "android" ? 40 : 0,
+    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: "#1976d2",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 10,
-    paddingBottom: Platform.OS === "android" ? 15 : 14,
-    gap: 8,
+    paddingTop: 22,
+    paddingBottom: Platform.OS === 'android' ? 20 : 14,
+    gap: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
