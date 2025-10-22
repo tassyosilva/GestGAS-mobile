@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {
+  createNativeStackNavigator,
+  NativeStackScreenProps,
+} from "@react-navigation/native-stack";
 import ConfiguracaoInicialScreen from "./src/screens/ConfiguracaoInicialScreen";
 import PinScreen from "./src/screens/PinScreen";
 import MinhasEntregasScreen from "./src/screens/MinhasEntregasScreen";
@@ -9,7 +12,28 @@ import { authService } from "./src/services/authService";
 import { storageService } from "./src/services/storageService";
 import { Alert } from "react-native";
 
-const Stack = createNativeStackNavigator();
+// 1. Definição dos tipos das rotas e seus parâmetros
+type RootStackParamList = {
+  ConfiguracaoInicial: undefined; // Não recebe parâmetros
+  CreatePin: undefined;
+  VerifyPin: undefined;
+  MinhasEntregas: undefined;
+  DetalhesPedido: { pedidoId: number }; // Recebe um pedidoId
+};
+
+// 2. Criação dos tipos específicos das props para cada tela inline
+type ConfiguracaoInicialProps = NativeStackScreenProps<
+  RootStackParamList,
+  "ConfiguracaoInicial"
+>;
+type CreatePinProps = NativeStackScreenProps<RootStackParamList, "CreatePin">;
+type VerifyPinProps = NativeStackScreenProps<RootStackParamList, "VerifyPin">;
+type MinhasEntregasProps = NativeStackScreenProps<
+  RootStackParamList,
+  "MinhasEntregas"
+>;
+
+const Stack = createNativeStackNavigator<RootStackParamList>(); // Tipado o Stack Navigator
 
 type AppState =
   | "loading"
@@ -21,11 +45,8 @@ type AppState =
 export default function App() {
   const [appState, setAppState] = useState<AppState>("loading");
 
-  useEffect(() => {
-    checkInitialState();
-  }, []);
-
-  const checkInitialState = async () => {
+  // Usamos useCallback para checkInitialState para evitar recriação desnecessária
+  const checkInitialState = useCallback(async () => {
     try {
       await authService.initialize();
 
@@ -41,19 +62,42 @@ export default function App() {
       }
     } catch (error) {
       console.error("Erro ao verificar estado inicial:", error);
-      setAppState("needsConfig");
+      setAppState("needsConfig"); // Garante um estado inicial seguro em caso de erro
     }
-  };
+  }, []); // Array vazio pois não depende de nada externo que mude
 
-  const handleConfigComplete = () => {
+  useEffect(() => {
+    checkInitialState();
+  }, [checkInitialState]); // Adicionada dependência
+
+  const handleConfigComplete = useCallback(() => {
     setAppState("createPin");
-  };
+  }, []);
 
-  const handlePinCreated = () => {
+  const handlePinCreated = useCallback(() => {
     setAppState("authenticated");
-  };
+  }, []);
 
-  const handlePinVerified = async () => {
+  // Usamos useCallback para handleForgotPin
+  const handleForgotPin = useCallback(() => {
+    Alert.alert(
+      "Reconfigurar Acesso",
+      "Isso irá apagar seus dados salvos e você precisará configurar o acesso novamente. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          style: "destructive",
+          onPress: async () => {
+            await storageService.clear();
+            setAppState("needsConfig");
+          },
+        },
+      ],
+    );
+  }, []); // Array vazio
+
+  const handlePinVerified = useCallback(async () => {
     try {
       const success = await authService.loginWithCredentials();
       if (success) {
@@ -65,7 +109,7 @@ export default function App() {
           [
             {
               text: "Reconfigurar",
-              onPress: handleForgotPin,
+              onPress: handleForgotPin, // Reutiliza a função
             },
           ],
         );
@@ -82,32 +126,14 @@ export default function App() {
           },
           {
             text: "Reconfigurar",
-            onPress: handleForgotPin,
+            onPress: handleForgotPin, // Reutiliza a função
           },
         ],
       );
     }
-  };
+  }, [handleForgotPin]); // Adicionada dependência
 
-  const handleForgotPin = () => {
-    Alert.alert(
-      "Reconfigurar Acesso",
-      "Isso irá apagar seus dados salvos e você precisará configurar o acesso novamente. Deseja continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Confirmar",
-          style: "destructive",
-          onPress: async () => {
-            await storageService.clear();
-            setAppState("needsConfig");
-          },
-        },
-      ],
-    );
-  };
-
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await authService.logout();
     const hasPin = await storageService.hasPin();
     if (hasPin) {
@@ -115,10 +141,10 @@ export default function App() {
     } else {
       setAppState("needsConfig");
     }
-  };
+  }, []);
 
   if (appState === "loading") {
-    return null;
+    return null; // Ou um componente de Loading
   }
 
   return (
@@ -126,7 +152,8 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {appState === "needsConfig" ? (
           <Stack.Screen name="ConfiguracaoInicial">
-            {(props) => (
+            {/* 3. Tipo adicionado às props */}
+            {(props: ConfiguracaoInicialProps) => (
               <ConfiguracaoInicialScreen
                 {...props}
                 onConfigComplete={handleConfigComplete}
@@ -135,7 +162,8 @@ export default function App() {
           </Stack.Screen>
         ) : appState === "createPin" ? (
           <Stack.Screen name="CreatePin">
-            {(props) => (
+            {/* 3. Tipo adicionado às props */}
+            {(props: CreatePinProps) => (
               <PinScreen
                 {...props}
                 mode="create"
@@ -145,25 +173,28 @@ export default function App() {
           </Stack.Screen>
         ) : appState === "needsPin" ? (
           <Stack.Screen name="VerifyPin">
-            {(props) => (
+            {/* 3. Tipo adicionado às props */}
+            {(props: VerifyPinProps) => (
               <PinScreen
                 {...props}
                 mode="verify"
                 onSuccess={handlePinVerified}
-                onCancel={handleForgotPin}
+                onCancel={handleForgotPin} // Reutiliza a função
               />
             )}
           </Stack.Screen>
         ) : (
           <>
             <Stack.Screen name="MinhasEntregas">
-              {(props) => (
+              {/* 3. Tipo adicionado às props */}
+              {(props: MinhasEntregasProps) => (
                 <MinhasEntregasScreen {...props} onLogout={handleLogout} />
               )}
             </Stack.Screen>
             <Stack.Screen
               name="DetalhesPedido"
               component={DetalhesPedidoScreen}
+              // Não precisa de tipo aqui porque não é inline
             />
           </>
         )}

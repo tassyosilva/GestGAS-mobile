@@ -268,7 +268,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             await Linking.openURL(wazeUrl);
             return;
           }
-        } catch (error) {
+        } catch {
           console.log("Waze não disponível, tentando próximo...");
         }
       }
@@ -281,15 +281,15 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             await Linking.openURL(googleMapsUrl);
             return;
           }
-        } catch (error) {
+        } catch {
           console.log("Google Maps app não disponível, tentando web...");
         }
       }
 
       try {
         await Linking.openURL(opcoes[1].webUrl);
-      } catch (_error) {
-        console.error("Erro ao abrir qualquer opção:", _error);
+      } catch {
+        console.error("Erro ao abrir qualquer opção:");
         Alert.alert("Erro", "Não foi possível abrir o aplicativo de navegação");
       }
     };

@@ -195,7 +195,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       loadPedidosFinalizados();
     }
   }, [
-    user,
     showFinalizados,
     loadPedidos,
     loadTotalFinalizados,
