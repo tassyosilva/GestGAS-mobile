@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
-  TextInput,
   Animated,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -26,7 +25,6 @@ import {
 import MapViewComponent from "../components/MapView";
 import * as Linking from "expo-linking";
 import { gruposService } from "../services/gruposService";
-import { api } from "../services/apiService";
 
 interface Props {
   route: any;
@@ -135,9 +133,37 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const checkAnim = useRef(new Animated.Value(0)).current;
 
+  const loadPedidoDetalhes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await pedidosService.obterPedidoDetalhes(pedidoId);
+
+      if (!data || !data.id) {
+        throw new Error("Dados do pedido inválidos");
+      }
+
+      if (!data.itens || !Array.isArray(data.itens)) {
+        data.itens = [];
+      }
+
+      if (!data.cliente) {
+        data.cliente = { id: 0, nome: "Cliente não informado", telefone: "" };
+      }
+
+      console.log("Pedido carregado:", data);
+      setPedido(data);
+    } catch (_error: any) {
+      console.error("Erro ao carregar detalhes:", _error);
+      Alert.alert("Erro", "Não foi possível carregar os detalhes do pedido");
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  }, [pedidoId, navigation]);
+
   useEffect(() => {
     loadPedidoDetalhes();
-  }, [pedidoId]);
+  }, [loadPedidoDetalhes]);
 
   useEffect(() => {
     if (
@@ -179,7 +205,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         }).start();
       }
     }
-  }, [pedido?.status]);
+  }, [pedido, pulseAnim, checkAnim]);
 
   const simplificarEnderecoParaNavegacao = (endereco: string): string => {
     let enderecoSimplificado = endereco;
@@ -269,34 +295,6 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     };
 
     tentarAbrir();
-  };
-
-  const loadPedidoDetalhes = async () => {
-    try {
-      setLoading(true);
-      const data = await pedidosService.obterPedidoDetalhes(pedidoId);
-
-      if (!data || !data.id) {
-        throw new Error("Dados do pedido inválidos");
-      }
-
-      if (!data.itens || !Array.isArray(data.itens)) {
-        data.itens = [];
-      }
-
-      if (!data.cliente) {
-        data.cliente = { id: 0, nome: "Cliente não informado", telefone: "" };
-      }
-
-      console.log("Pedido carregado:", data);
-      setPedido(data);
-    } catch (error: any) {
-      console.error("Erro ao carregar detalhes:", error);
-      Alert.alert("Erro", "Não foi possível carregar os detalhes do pedido");
-      navigation.goBack();
-    } finally {
-      setLoading(false);
-    }
   };
 
   const geocodeAddress = async (address: string) => {
