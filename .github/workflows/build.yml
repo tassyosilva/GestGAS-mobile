@@ -23,6 +23,8 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        env:
+          NODE_ENV: development
 
       - name: Check Code Formatting
         # Roda o verificador do Prettier diretamente.
@@ -32,9 +34,6 @@ jobs:
 
       - name: Lint Code
         run: npx eslint . --ext .ts,.tsx
-        env:
-          # Força o ESLint v9 (que está sendo baixado) a usar a config antiga
-          ESLINT_USE_FLAT_CONFIG: "false"
 
       - name: Check TypeScript Types
         # Este é o passo mais crítico. Continua o mesmo.
