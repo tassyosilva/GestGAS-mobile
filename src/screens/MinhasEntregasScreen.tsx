@@ -17,7 +17,7 @@ import { pedidosService } from "../services/pedidoService";
 import { Pedido, Usuario, PedidoResolvido } from "../types";
 import PedidoCard from "../components/PedidoCard";
 import { calcularTempoEntrega, formatShortDate } from "../utils/formatters";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {
   navigation: any;
@@ -385,7 +385,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         // Modifique a prop style para usar um array e adicionar o padding dinâmico
         style={[
           styles.historicoButton,
-          { paddingBottom: styles.historicoButton.paddingBottom + insets.bottom } // Adiciona o inset ao padding original
+          {
+            paddingBottom: styles.historicoButton.paddingBottom + insets.bottom,
+          }, // Adiciona o inset ao padding original
         ]}
         onPress={toggleFinalizados}
       >
@@ -532,7 +534,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 22,
-    paddingBottom: Platform.OS === 'android' ? 20 : 14,
+    paddingBottom: Platform.OS === "android" ? 20 : 14,
     gap: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
