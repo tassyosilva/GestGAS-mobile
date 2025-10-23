@@ -413,42 +413,80 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
   };
 
   const confirmarSemCascos = async () => {
-    try {
-      await pedidosService.confirmarEntrega({
-        pedido_id: pedido!.id,
-      });
+    Alert.alert(
+      "Confirmar Entrega",
+      "Você confirma que esta entrega foi realizada? Esta ação não pode ser desfeita.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => setConfirmingDelivery(false),
+        },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            try {
+              await pedidosService.confirmarEntrega({
+                pedido_id: pedido!.id,
+              });
 
-      Alert.alert("Sucesso", "Entrega confirmada com sucesso!", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
-    } catch (error: any) {
-      console.error("Erro ao confirmar:", error);
-      Alert.alert("Erro", error.response?.data || "Erro ao confirmar entrega");
-    } finally {
-      setConfirmingDelivery(false);
-    }
+              Alert.alert("Sucesso", "Entrega confirmada com sucesso!", [
+                { text: "OK", onPress: () => navigation.goBack() },
+              ]);
+            } catch (error: any) {
+              console.error("Erro ao confirmar:", error);
+              Alert.alert(
+                "Erro",
+                error.response?.data || "Erro ao confirmar entrega",
+              );
+            } finally {
+              setConfirmingDelivery(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const confirmarComCascos = async (cascos: {
     [key: string]: Array<{ casco_id: number; quantidade: number }>;
   }) => {
-    try {
-      await pedidosService.confirmarEntrega({
-        pedido_id: pedido!.id,
-        cascos: cascos,
-      });
+    Alert.alert(
+      "Confirmar Entrega",
+      "Você confirma que esta entrega foi realizada? Esta ação não pode ser desfeita.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => setConfirmingDelivery(false),
+        },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            try {
+              await pedidosService.confirmarEntrega({
+                pedido_id: pedido!.id,
+                cascos: cascos,
+              });
 
-      Alert.alert(
-        "Sucesso",
-        "Entrega confirmada e cascos registrados com sucesso!",
-        [{ text: "OK", onPress: () => navigation.goBack() }],
-      );
-    } catch (error: any) {
-      console.error("Erro ao confirmar com cascos:", error);
-      Alert.alert("Erro", error.response?.data || "Erro ao confirmar entrega");
-    } finally {
-      setConfirmingDelivery(false);
-    }
+              Alert.alert(
+                "Sucesso",
+                "Entrega confirmada e cascos registrados com sucesso!",
+                [{ text: "OK", onPress: () => navigation.goBack() }],
+              );
+            } catch (error: any) {
+              console.error("Erro ao confirmar com cascos:", error);
+              Alert.alert(
+                "Erro",
+                error.response?.data || "Erro ao confirmar entrega",
+              );
+            } finally {
+              setConfirmingDelivery(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleIncrementoCasco = (
@@ -739,7 +777,9 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                           size={12}
                           color="#ff9800"
                         />
-                        <Text style={styles.botijaText}>Retorna botija</Text>
+                        <Text style={styles.botijaText}>
+                          CLIENTE RETORNA CASCO
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -1395,7 +1435,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   modalFooter: {
-    flexDirection: "row",
+    flexDirection: "column",
     padding: 20,
     paddingBottom: Platform.OS === "android" ? 30 : 20,
     gap: 12,
@@ -1403,7 +1443,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#f0f0f0",
   },
   modalButton: {
-    flex: 1,
+    width: "100%",
     borderRadius: 12,
     overflow: "hidden",
   },
@@ -1411,7 +1451,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 2,
     borderColor: "#ccc",
-    padding: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1428,7 +1469,8 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   confirmModalButtonGradient: {
-    padding: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     alignItems: "center",
     justifyContent: "center",
   },
