@@ -76,19 +76,22 @@ export default function PedidoCard({ pedido, onPress }: Props) {
 
       <View style={styles.cardBody}>
         <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={16} color="#666" />
+          {/* --- ÍCONE ATUALIZADO --- */}
+          <Ionicons name="location-outline" size={16} color="#f44336" />
           <Text style={styles.infoText} numberOfLines={2}>
             {pedido.endereco_entrega}
           </Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Ionicons name="call-outline" size={16} color="#666" />
+          {/* --- ÍCONE ATUALIZADO --- */}
+          <Ionicons name="call-outline" size={16} color="#4caf50" />
           <Text style={styles.infoText}>{pedido.cliente.telefone}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Ionicons name="calendar-outline" size={16} color="#666" />
+          {/* --- ÍCONE ATUALIZADO --- */}
+          <Ionicons name="calendar-outline" size={16} color="#ff9800" />
           <Text style={styles.infoText}>{formatDate(pedido.criado_em)}</Text>
         </View>
       </View>
