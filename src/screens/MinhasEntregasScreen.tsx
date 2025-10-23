@@ -634,8 +634,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 22, // Padding ajustado
-    paddingBottom: Platform.OS === "android" ? 20 : 14, // Padding base
+    paddingTop: 16, // Padding ajustado
+    paddingBottom: Platform.OS === "android" ? 14 : 14, // Padding base
     gap: 10,
   },
   historicoButtonText: {

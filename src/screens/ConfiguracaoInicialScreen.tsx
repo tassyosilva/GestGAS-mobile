@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../services/authService";
 import axios from "axios";
+import { iniciarRastreamento } from "../services/locationService";
 
 interface Props {
   onConfigComplete: () => void;
@@ -177,8 +178,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         senha,
       });
 
-      console.log("Configuração concluída com sucesso");
+      await iniciarRastreamento();
 
+      console.log("Configuração concluída com sucesso");
       onConfigComplete();
     } catch (error: any) {
       console.error("Erro ao configurar:", error);

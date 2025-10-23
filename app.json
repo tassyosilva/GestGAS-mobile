@@ -22,6 +22,11 @@
         "backgroundColor": "#1976d2"
       },
       "package": "com.gestgas.entregas",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
       "navigationBar": {
         "visible": "leanback",
         "barStyle": "dark-content",
@@ -33,7 +38,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permitir que o app acesse sua localização para rastreamento de entregas."
+          "locationAlwaysAndWhenInUsePermission": "Permitir que o app acesse sua localização para rastreamento de entregas.",
+          "locationAlwaysPermission": "Permitir que o app acesse sua localização em segundo plano para rastreamento de entregas.",
+          "locationWhenInUsePermission": "Permitir que o app acesse sua localização durante as entregas."
         }
       ],
       [
