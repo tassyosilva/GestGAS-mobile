@@ -67,13 +67,13 @@ class GeocodingService {
 
     // Remover CEP
     enderecoSimplificado = enderecoSimplificado.replace(
-      /,?\s*CEP\s*:?\s*[\d\-\.]+/gi,
+      /,?\s*CEP\s*:?\s*[\d\-. ]+/gi,
       "",
     );
 
     // Remover "ATÉ" e variações
     enderecoSimplificado = enderecoSimplificado.replace(
-      /,\s*ATÉ\s+[\d\/\-]+/gi,
+      /,\s*ATÉ\s+[\d/-]+/gi,
       "",
     );
 
@@ -131,9 +131,27 @@ class GeocodingService {
         const location = response.data[0];
         console.log("Coordenadas encontradas:", location);
 
+        // CORREÇÃO: Validação rigorosa das coordenadas
+        const lat = parseFloat(location.lat);
+        const lon = parseFloat(location.lon);
+
+        if (
+          isNaN(lat) ||
+          isNaN(lon) ||
+          !isFinite(lat) ||
+          !isFinite(lon) ||
+          lat < -90 ||
+          lat > 90 ||
+          lon < -180 ||
+          lon > 180
+        ) {
+          console.error("Coordenadas inválidas recebidas:", { lat, lon });
+          return null;
+        }
+
         return {
-          latitude: parseFloat(location.lat),
-          longitude: parseFloat(location.lon),
+          latitude: lat,
+          longitude: lon,
         };
       }
 
@@ -141,6 +159,8 @@ class GeocodingService {
     } catch (error: any) {
       if (error.response?.status === 429) {
         console.error("Rate limit excedido");
+      } else {
+        console.error("Erro ao geocodificar:", error.message);
       }
       return null;
     }

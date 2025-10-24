@@ -349,23 +349,52 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
   };
 
   const geocodeAddress = async (address: string) => {
+    // CORREÇÃO: Validar endereço antes de processar
+    if (
+      !address ||
+      typeof address !== "string" ||
+      address.trim().length === 0
+    ) {
+      console.error("Endereço inválido para geocoding:", address);
+      if (isMountedRef.current) {
+        setGeocodeError("Endereço não disponível");
+      }
+      return;
+    }
+
     try {
       if (isMountedRef.current) {
         setGeocoding(true);
         setGeocodeError(null);
+        setLocation(null); // CORREÇÃO: Limpar localização anterior
       }
+
       const coords = await geocodingService.geocodeAddress(address);
-      if (isMountedRef.current) {
-        if (coords) {
+
+      if (!isMountedRef.current) return;
+
+      if (coords) {
+        // CORREÇÃO: Validar coordenadas recebidas
+        if (
+          coords.latitude &&
+          coords.longitude &&
+          !isNaN(coords.latitude) &&
+          !isNaN(coords.longitude) &&
+          isFinite(coords.latitude) &&
+          isFinite(coords.longitude)
+        ) {
           setLocation(coords);
         } else {
-          setGeocodeError(
-            "Mapa indisponível para este endereço. Abra a navegação para visualizar.",
-          );
+          console.error("Coordenadas inválidas recebidas do serviço:", coords);
+          setGeocodeError("Erro ao processar localização");
         }
+      } else {
+        setGeocodeError(
+          "Mapa indisponível para este endereço. Abra a navegação para visualizar.",
+        );
       }
-    } catch (_error) {
-      console.error("Erro capturado no geocodeAddress:", _error);
+    } catch (error) {
+      console.error("Erro capturado no geocodeAddress:", error);
       if (isMountedRef.current) {
         setGeocodeError("Erro ao buscar localização");
       }
@@ -720,50 +749,73 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
       );
     }
 
-    if (location && location.latitude && location.longitude) {
-      try {
-        // Validar coordenadas
-        if (
-          isNaN(location.latitude) ||
-          isNaN(location.longitude) ||
-          location.latitude < -90 ||
-          location.latitude > 90 ||
-          location.longitude < -180 ||
-          location.longitude > 180
-        ) {
-          console.error("Coordenadas inválidas:", location);
-          return (
-            <View style={styles.errorContainer}>
-              <Ionicons name="warning" size={18} color="#f44336" />
-              <Text style={styles.errorText}>
-                Coordenadas inválidas para este endereço
-              </Text>
-            </View>
-          );
-        }
-
-        return (
-          <View style={styles.mapContainer}>
-            <MapViewComponent
-              latitude={location.latitude}
-              longitude={location.longitude}
-              title={pedido?.cliente?.nome || "Cliente"}
-              description={pedido?.endereco_entrega || ""}
-            />
-          </View>
-        );
-      } catch (error) {
-        console.error("Erro ao renderizar mapa:", error);
-        return (
-          <View style={styles.errorContainer}>
-            <Ionicons name="warning" size={18} color="#f44336" />
-            <Text style={styles.errorText}>Erro ao carregar mapa</Text>
-          </View>
-        );
-      }
+    if (!location) {
+      return null;
     }
 
-    return null;
+    // CORREÇÃO: Validação completa antes de renderizar
+    if (
+      !location.latitude ||
+      !location.longitude ||
+      typeof location.latitude !== "number" ||
+      typeof location.longitude !== "number"
+    ) {
+      console.error("Estrutura de location inválida:", location);
+      return (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={18} color="#f44336" />
+          <Text style={styles.errorText}>Dados de localização incompletos</Text>
+        </View>
+      );
+    }
+
+    const { latitude, longitude } = location;
+
+    // Validar valores numéricos
+    if (
+      isNaN(latitude) ||
+      isNaN(longitude) ||
+      !isFinite(latitude) ||
+      !isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      console.error("Coordenadas com valores inválidos:", {
+        latitude,
+        longitude,
+      });
+      return (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={18} color="#f44336" />
+          <Text style={styles.errorText}>
+            Coordenadas inválidas para este endereço
+          </Text>
+        </View>
+      );
+    }
+
+    try {
+      return (
+        <View style={styles.mapContainer}>
+          <MapViewComponent
+            latitude={latitude}
+            longitude={longitude}
+            title={pedido?.cliente?.nome || "Cliente"}
+            description={pedido?.endereco_entrega || ""}
+          />
+        </View>
+      );
+    } catch (error) {
+      console.error("Erro ao renderizar mapa:", error);
+      return (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={18} color="#f44336" />
+          <Text style={styles.errorText}>Erro ao carregar mapa</Text>
+        </View>
+      );
+    }
   };
 
   if (loading) {
