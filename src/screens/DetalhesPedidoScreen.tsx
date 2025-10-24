@@ -40,56 +40,66 @@ const AnimatedStatusBadge = ({
   pulseAnim: Animated.Value;
   checkAnim: Animated.Value;
 }) => {
-  const getStatusColor = (status: string): string => {
+  const getStatusColor = (statusValue: string): string => {
     const colors: Record<string, string> = {
       em_entrega: "#2196f3",
       entregue: "#4caf50",
       pendente: "#ff9800",
       cancelado: "#f44336",
     };
-    return colors[status] || "#999";
+    return colors[statusValue] || "#999";
   };
 
-  const getStatusLabel = (status: string): string => {
+  const getStatusLabel = (statusValue: string): string => {
     const labels: Record<string, string> = {
       em_entrega: "Em Entrega",
       entregue: "Entregue",
       pendente: "Pendente",
       cancelado: "Cancelado",
     };
-    return labels[status] || status;
+    return labels[statusValue] || statusValue;
   };
 
   const renderIcon = () => {
-    if (status === "em_entrega") {
-      return (
-        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <Ionicons
-            name="bicycle"
-            size={18}
-            color="#fff"
-            style={{ marginRight: 6 }}
-          />
-        </Animated.View>
-      );
-    } else if (status === "entregue") {
-      const rotateInterpolate = checkAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ["0deg", "360deg"],
-      });
+    try {
+      if (status === "em_entrega") {
+        return (
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Ionicons
+              name="bicycle"
+              size={18}
+              color="#fff"
+              style={styles.iconMarginRight}
+            />
+          </Animated.View>
+        );
+      } else if (status === "entregue") {
+        const rotateInterpolate = checkAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["0deg", "360deg"],
+        });
 
-      return (
-        <Animated.View
-          style={{
-            transform: [{ scale: checkAnim }, { rotate: rotateInterpolate }],
-            marginRight: 6,
-          }}
-        >
-          <Ionicons name="checkmark-circle" size={18} color="#fff" />
-        </Animated.View>
-      );
+        return (
+          <Animated.View
+            style={[
+              styles.iconMarginRight,
+              {
+                transform: [
+                  { scale: checkAnim },
+                  { rotate: rotateInterpolate },
+                ],
+              },
+            ]}
+          >
+            <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          </Animated.View>
+        );
+      }
+      return null;
+    } catch (error) {
+      console.error("Erro ao renderizar ícone de status:", error);
+      return null;
     }
-    return null;
   };
 
   return (
@@ -99,7 +109,7 @@ const AnimatedStatusBadge = ({
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View style={styles.flexRowCenter}>
         {renderIcon()}
         <Text style={styles.statusText}>{getStatusLabel(status)}</Text>
       </View>
@@ -132,6 +142,15 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const checkAnim = useRef(new Animated.Value(0)).current;
+  const isMountedRef = useRef(true);
+
+  // CORREÇÃO 1: Adicionar cleanup para prevenir memory leaks
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadPedidoDetalhes = useCallback(async () => {
     try {
@@ -151,13 +170,19 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
       }
 
       console.log("Pedido carregado:", data);
-      setPedido(data);
+      if (isMountedRef.current) {
+        setPedido(data);
+      }
     } catch (_error: any) {
       console.error("Erro ao carregar detalhes:", _error);
-      Alert.alert("Erro", "Não foi possível carregar os detalhes do pedido");
-      navigation.goBack();
+      if (isMountedRef.current) {
+        Alert.alert("Erro", "Não foi possível carregar os detalhes do pedido");
+        navigation.goBack();
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [pedidoId, navigation]);
 
@@ -175,145 +200,179 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
       geocodeAddress(pedido.endereco_entrega);
     } else if (pedido && !pedido.endereco_entrega) {
       console.log("Pedido sem endereço de entrega");
-      setGeocodeError("Endereço de entrega não disponível");
+      if (isMountedRef.current) {
+        setGeocodeError("Endereço de entrega não disponível");
+      }
     }
   }, [pedido]);
 
+  // CORREÇÃO 2: Proteção nas animações
   useEffect(() => {
     if (pedido) {
-      if (pedido.status === "em_entrega") {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-          ]),
-        ).start();
-      } else if (pedido.status === "entregue") {
-        Animated.spring(checkAnim, {
-          toValue: 1,
-          friction: 4,
-          tension: 80,
-          useNativeDriver: true,
-        }).start();
+      try {
+        if (pedido.status === "em_entrega") {
+          const animation = Animated.loop(
+            Animated.sequence([
+              Animated.timing(pulseAnim, {
+                toValue: 1.1,
+                duration: 1000,
+                useNativeDriver: true,
+              }),
+              Animated.timing(pulseAnim, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+              }),
+            ]),
+          );
+          animation.start();
+
+          return () => {
+            animation.stop();
+          };
+        } else if (pedido.status === "entregue") {
+          const animation = Animated.spring(checkAnim, {
+            toValue: 1,
+            friction: 4,
+            tension: 80,
+            useNativeDriver: true,
+          });
+          animation.start();
+        }
+      } catch (error) {
+        console.error("Erro ao iniciar animação:", error);
       }
     }
   }, [pedido, pulseAnim, checkAnim]);
 
   const simplificarEnderecoParaNavegacao = (endereco: string): string => {
-    let enderecoSimplificado = endereco;
+    try {
+      let enderecoSimplificado = endereco;
 
-    enderecoSimplificado = enderecoSimplificado.replace(
-      /,?\s*CEP\s*:?\s*[\d\-\.]+/gi,
-      "",
-    );
-    enderecoSimplificado = enderecoSimplificado.replace(
-      /,\s*(Casa|Apartamento|Apto|Ap|Sala|Loja|Galpão|Sobrado|Bloco|Torre)\b[^,]*/gi,
-      "",
-    );
-    enderecoSimplificado = enderecoSimplificado.replace(
-      /,\s*Bairro\s+(Outros\/Não informado|Não informado|Outros|N\/A|S\/N)\b[^,]*/gi,
-      "",
-    );
-    enderecoSimplificado = enderecoSimplificado.replace(
-      /,?\s*Bairro\s+/gi,
-      ", ",
-    );
-    enderecoSimplificado = enderecoSimplificado.replace(/\s*,\s*/g, ", ");
-    enderecoSimplificado = enderecoSimplificado.replace(/,+/g, ",");
-    enderecoSimplificado = enderecoSimplificado.trim().replace(/^,|,$/g, "");
+      enderecoSimplificado = enderecoSimplificado.replace(
+        /,?\s*CEP\s*:?\s*[\d\-.]+/gi,
+        "",
+      );
+      enderecoSimplificado = enderecoSimplificado.replace(
+        /,\s*(Casa|Apartamento|Apto|Ap|Sala|Loja|Galpão|Sobrado|Bloco|Torre)\b[^,]*/gi,
+        "",
+      );
+      enderecoSimplificado = enderecoSimplificado.replace(
+        /,\s*Bairro\s+(Outros\/Não informado|Não informado|Outros|N\/A|S\/N)\b[^,]*/gi,
+        "",
+      );
+      enderecoSimplificado = enderecoSimplificado.replace(
+        /,?\s*Bairro\s+/gi,
+        ", ",
+      );
+      enderecoSimplificado = enderecoSimplificado.replace(/\s*,\s*/g, ", ");
+      enderecoSimplificado = enderecoSimplificado.replace(/,+/g, ",");
+      enderecoSimplificado = enderecoSimplificado.trim().replace(/^,|,$/g, "");
 
-    return enderecoSimplificado;
+      return enderecoSimplificado;
+    } catch (error) {
+      console.error("Erro ao simplificar endereço:", error);
+      return endereco;
+    }
   };
 
   const abrirNavegacao = () => {
-    if (!pedido) return;
+    try {
+      if (!pedido) return;
 
-    const enderecoOriginal = pedido.endereco_entrega;
-    const endereco = simplificarEnderecoParaNavegacao(enderecoOriginal);
+      const enderecoOriginal = pedido.endereco_entrega;
+      const endereco = simplificarEnderecoParaNavegacao(enderecoOriginal);
 
-    console.log("Abrindo navegação para:", endereco);
+      console.log("Abrindo navegação para:", endereco);
 
-    const enderecoEncoded = encodeURIComponent(endereco);
+      const enderecoEncoded = encodeURIComponent(endereco);
 
-    const opcoes = [
-      {
-        nome: "Waze",
-        url: `waze://?q=${enderecoEncoded}`,
-        webUrl: `https://waze.com/ul?q=${enderecoEncoded}`,
-      },
-      {
-        nome: "Google Maps",
-        url: Platform.select({
-          ios: `comgooglemaps://?q=${enderecoEncoded}`,
-          android: `google.navigation:q=${enderecoEncoded}`,
-        }),
-        webUrl: `https://www.google.com/maps/search/?api=1&query=${enderecoEncoded}`,
-      },
-    ];
+      const opcoes = [
+        {
+          nome: "Waze",
+          url: `waze://?q=${enderecoEncoded}`,
+          webUrl: `https://waze.com/ul?q=${enderecoEncoded}`,
+        },
+        {
+          nome: "Google Maps",
+          url: Platform.select({
+            ios: `comgooglemaps://?q=${enderecoEncoded}`,
+            android: `google.navigation:q=${enderecoEncoded}`,
+          }),
+          webUrl: `https://www.google.com/maps/search/?api=1&query=${enderecoEncoded}`,
+        },
+      ];
 
-    const tentarAbrir = async () => {
-      const wazeUrl = opcoes[0].url;
-      if (wazeUrl) {
-        try {
-          const wazeSupported = await Linking.canOpenURL(wazeUrl);
-          if (wazeSupported) {
-            await Linking.openURL(wazeUrl);
-            return;
+      const tentarAbrir = async () => {
+        const wazeUrl = opcoes[0].url;
+        if (wazeUrl) {
+          try {
+            const wazeSupported = await Linking.canOpenURL(wazeUrl);
+            if (wazeSupported) {
+              await Linking.openURL(wazeUrl);
+              return;
+            }
+          } catch {
+            console.log("Waze não disponível, tentando próximo...");
           }
-        } catch {
-          console.log("Waze não disponível, tentando próximo...");
         }
-      }
 
-      const googleMapsUrl = opcoes[1].url;
-      if (googleMapsUrl) {
-        try {
-          const googleMapsSupported = await Linking.canOpenURL(googleMapsUrl);
-          if (googleMapsSupported) {
-            await Linking.openURL(googleMapsUrl);
-            return;
+        const googleMapsUrl = opcoes[1].url;
+        if (googleMapsUrl) {
+          try {
+            const googleMapsSupported = await Linking.canOpenURL(googleMapsUrl);
+            if (googleMapsSupported) {
+              await Linking.openURL(googleMapsUrl);
+              return;
+            }
+          } catch {
+            console.log("Google Maps app não disponível, tentando web...");
           }
-        } catch {
-          console.log("Google Maps app não disponível, tentando web...");
         }
-      }
 
-      try {
-        await Linking.openURL(opcoes[1].webUrl);
-      } catch {
-        console.error("Erro ao abrir qualquer opção:");
-        Alert.alert("Erro", "Não foi possível abrir o aplicativo de navegação");
-      }
-    };
+        try {
+          await Linking.openURL(opcoes[1].webUrl);
+        } catch {
+          console.error("Erro ao abrir qualquer opção:");
+          Alert.alert(
+            "Erro",
+            "Não foi possível abrir o aplicativo de navegação",
+          );
+        }
+      };
 
-    tentarAbrir();
+      tentarAbrir();
+    } catch (error) {
+      console.error("Erro em abrirNavegacao:", error);
+      Alert.alert("Erro", "Não foi possível abrir a navegação");
+    }
   };
 
   const geocodeAddress = async (address: string) => {
     try {
-      setGeocoding(true);
-      setGeocodeError(null);
+      if (isMountedRef.current) {
+        setGeocoding(true);
+        setGeocodeError(null);
+      }
       const coords = await geocodingService.geocodeAddress(address);
-      if (coords) {
-        setLocation(coords);
-      } else {
-        setGeocodeError(
-          "Mapa indisponível para este endereço. Abra a navegação para visualizar.",
-        );
+      if (isMountedRef.current) {
+        if (coords) {
+          setLocation(coords);
+        } else {
+          setGeocodeError(
+            "Mapa indisponível para este endereço. Abra a navegação para visualizar.",
+          );
+        }
       }
     } catch (_error) {
       console.error("Erro capturado no geocodeAddress:", _error);
-      setGeocodeError("Erro ao buscar localização");
+      if (isMountedRef.current) {
+        setGeocodeError("Erro ao buscar localização");
+      }
     } finally {
-      setGeocoding(false);
+      if (isMountedRef.current) {
+        setGeocoding(false);
+      }
     }
   };
 
@@ -508,7 +567,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
       let totalSelecionadoAtual = 0;
       for (const id in quantidadesProdutoAtual) {
-        if (parseInt(id) !== cascoId) {
+        if (parseInt(id, 10) !== cascoId) {
           totalSelecionadoAtual += quantidadesProdutoAtual[id];
         }
       }
@@ -573,7 +632,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         ([cascoIdStr, quantidade]) => {
           if (quantidade > 0) {
             cascosComQuantidade.push({
-              casco_id: parseInt(cascoIdStr),
+              casco_id: parseInt(cascoIdStr, 10),
               quantidade: quantidade,
             });
           }
@@ -589,6 +648,122 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     setConfirmingDelivery(true);
 
     await confirmarComCascos(cascos);
+  };
+
+  // CORREÇÃO 3: Proteger renderização do tempo de espera
+  const renderTempoEspera = () => {
+    if (!pedido || pedido.status !== "em_entrega" || !pedido.criado_em) {
+      return null;
+    }
+
+    try {
+      const agora = new Date();
+      const criacao = new Date(pedido.criado_em);
+
+      // Validar se a data é válida
+      if (isNaN(criacao.getTime())) {
+        console.error("Data de criação inválida:", pedido.criado_em);
+        return null;
+      }
+
+      const diffDias = Math.floor(
+        (agora.getTime() - criacao.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (diffDias > 30) {
+        return (
+          <View style={styles.tempoEsperaContainer}>
+            <Ionicons name="time" size={18} color="#ff9800" />
+            <Text style={styles.tempoEsperaText}>
+              Criado em {formatDate(pedido.criado_em)}
+            </Text>
+          </View>
+        );
+      }
+
+      const tempoEspera = calcularTempoEspera(pedido.criado_em);
+      return (
+        <View style={styles.tempoEsperaContainer}>
+          <Ionicons name="time" size={18} color="#ff9800" />
+          <Text
+            style={styles.tempoEsperaText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {tempoEspera}
+          </Text>
+        </View>
+      );
+    } catch (error) {
+      console.error("Erro ao calcular tempo de espera:", error);
+      return null;
+    }
+  };
+
+  // CORREÇÃO 4: Proteger renderização do mapa
+  const renderMapa = () => {
+    if (geocoding) {
+      return (
+        <View style={styles.geocodingContainer}>
+          <ActivityIndicator size="small" color="#1976d2" />
+          <Text style={styles.geocodingText}>Localizando endereço...</Text>
+        </View>
+      );
+    }
+
+    if (geocodeError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={18} color="#f44336" />
+          <Text style={styles.errorText}>{geocodeError}</Text>
+        </View>
+      );
+    }
+
+    if (location && location.latitude && location.longitude) {
+      try {
+        // Validar coordenadas
+        if (
+          isNaN(location.latitude) ||
+          isNaN(location.longitude) ||
+          location.latitude < -90 ||
+          location.latitude > 90 ||
+          location.longitude < -180 ||
+          location.longitude > 180
+        ) {
+          console.error("Coordenadas inválidas:", location);
+          return (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={18} color="#f44336" />
+              <Text style={styles.errorText}>
+                Coordenadas inválidas para este endereço
+              </Text>
+            </View>
+          );
+        }
+
+        return (
+          <View style={styles.mapContainer}>
+            <MapViewComponent
+              latitude={location.latitude}
+              longitude={location.longitude}
+              title={pedido?.cliente?.nome || "Cliente"}
+              description={pedido?.endereco_entrega || ""}
+            />
+          </View>
+        );
+      } catch (error) {
+        console.error("Erro ao renderizar mapa:", error);
+        return (
+          <View style={styles.errorContainer}>
+            <Ionicons name="warning" size={18} color="#f44336" />
+            <Text style={styles.errorText}>Erro ao carregar mapa</Text>
+          </View>
+        );
+      }
+    }
+
+    return null;
   };
 
   if (loading) {
@@ -623,7 +798,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Detalhes do Pedido</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.statusCard}>
@@ -654,45 +829,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             <Ionicons name="call" size={18} color="#1976d2" />
             <Text style={styles.telefoneText}>{pedido.cliente.telefone}</Text>
           </TouchableOpacity>
-          {pedido.status === "em_entrega" &&
-            pedido.criado_em &&
-            (() => {
-              try {
-                const tempoEspera = calcularTempoEspera(pedido.criado_em);
-                const agora = new Date();
-                const criacao = new Date(pedido.criado_em);
-                const diffDias = Math.floor(
-                  (agora.getTime() - criacao.getTime()) / (1000 * 60 * 60 * 24),
-                );
-
-                if (diffDias > 30) {
-                  return (
-                    <View style={styles.tempoEsperaContainer}>
-                      <Ionicons name="time" size={18} color="#ff9800" />
-                      <Text style={styles.tempoEsperaText}>
-                        Criado em {formatDate(pedido.criado_em)}
-                      </Text>
-                    </View>
-                  );
-                }
-
-                return (
-                  <View style={styles.tempoEsperaContainer}>
-                    <Ionicons name="time" size={18} color="#ff9800" />
-                    <Text
-                      style={styles.tempoEsperaText}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {tempoEspera}
-                    </Text>
-                  </View>
-                );
-              } catch (error) {
-                console.error("Erro ao calcular tempo de espera:", error);
-                return null;
-              }
-            })()}
+          {renderTempoEspera()}
         </View>
 
         <View style={styles.section}>
@@ -720,30 +857,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             </LinearGradient>
           </TouchableOpacity>
 
-          {geocoding && (
-            <View style={styles.geocodingContainer}>
-              <ActivityIndicator size="small" color="#1976d2" />
-              <Text style={styles.geocodingText}>Localizando endereço...</Text>
-            </View>
-          )}
-
-          {geocodeError && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="warning" size={18} color="#f44336" />
-              <Text style={styles.errorText}>{geocodeError}</Text>
-            </View>
-          )}
-
-          {location && !geocoding && (
-            <View style={styles.mapContainer}>
-              <MapViewComponent
-                latitude={location.latitude}
-                longitude={location.longitude}
-                title={pedido.cliente.nome}
-                description={pedido.endereco_entrega}
-              />
-            </View>
-          )}
+          {renderMapa()}
         </View>
 
         <View style={styles.section}>
@@ -790,10 +904,8 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
               );
             })
           ) : (
-            <View style={{ padding: 20, alignItems: "center" }}>
-              <Text style={{ fontSize: 14, color: "#999" }}>
-                Nenhum item encontrado
-              </Text>
+            <View style={styles.emptyPadding}>
+              <Text style={styles.emptyItemText}>Nenhum item encontrado</Text>
             </View>
           )}
         </View>
@@ -859,7 +971,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        <View style={{ height: 20 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <Modal
@@ -1511,5 +1623,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.3,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  iconMarginRight: {
+    marginRight: 6,
+  },
+  flexRowCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  emptyPadding: {
+    padding: 20,
+    alignItems: "center",
+  },
+  emptyItemText: {
+    fontSize: 14,
+    color: "#999",
+  },
+  bottomSpacer: {
+    height: 20,
   },
 });

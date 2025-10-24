@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,17 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
   const [loading, setLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
 
+  // CORREÇÃO 1: Adicionar ref de montagem
+  const isMountedRef = useRef(true);
+
+  // CORREÇÃO 2: Cleanup ao desmontar
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const normalizeServerUrl = (url: string): string => {
     let normalized = url.trim();
 
@@ -52,7 +63,8 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
     const normalizedUrl = normalizeServerUrl(url);
 
     try {
-      new URL(normalizedUrl);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const urlValida = new URL(normalizedUrl);
       return { valida: true, mensagem: "" };
     } catch {
       return {
@@ -69,6 +81,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
       return;
     }
 
+    if (!isMountedRef.current) return;
     setTestingConnection(true);
 
     try {
@@ -76,23 +89,28 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
       console.log("Testando conexão com:", url);
 
+      // CORREÇÃO 3: Aumentar timeout para redes locais
       const response = await axios.get(`${url}/api/health`, {
-        timeout: 5000,
+        timeout: 10000, // 10 segundos
         validateStatus: (status) => status < 500,
       });
 
       console.log("Resposta do servidor:", response.status);
 
-      if (response.status === 200 || response.status === 404) {
-        Alert.alert("Sucesso", "Conexão com o servidor estabelecida!");
-      } else {
-        Alert.alert(
-          "Aviso",
-          `Servidor respondeu com status ${response.status}. Você pode tentar fazer login.`,
-        );
+      if (isMountedRef.current) {
+        if (response.status === 200 || response.status === 404) {
+          Alert.alert("Sucesso", "Conexão com o servidor estabelecida!");
+        } else {
+          Alert.alert(
+            "Aviso",
+            `Servidor respondeu com status ${response.status}. Você pode tentar fazer login.`,
+          );
+        }
       }
     } catch (error: any) {
       console.error("Erro ao testar conexão:", error);
+
+      if (!isMountedRef.current) return;
 
       let errorMessage = "Não foi possível conectar ao servidor.";
 
@@ -113,7 +131,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
       Alert.alert("Erro de Conexão", errorMessage);
     } finally {
-      setTestingConnection(false);
+      if (isMountedRef.current) {
+        setTestingConnection(false);
+      }
     }
   };
 
@@ -134,6 +154,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
       return;
     }
 
+    if (!isMountedRef.current) return;
     setLoading(true);
 
     try {
@@ -146,6 +167,11 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         login.trim(),
         senha,
       );
+
+      if (!isMountedRef.current) {
+        setLoading(false);
+        return;
+      }
 
       if (!response || typeof response !== "object") {
         throw new Error("Resposta inválida do servidor");
@@ -169,7 +195,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
           "Acesso Negado",
           "Apenas usuários com perfil de entregador podem usar este aplicativo",
         );
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
         return;
       }
 
@@ -178,12 +206,26 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         senha,
       });
 
-      await iniciarRastreamento();
+      // CORREÇÃO 4: Proteger inicialização de rastreamento
+      try {
+        await iniciarRastreamento();
+      } catch (trackingError) {
+        console.error("Erro ao iniciar rastreamento:", trackingError);
+        // Não bloqueia o login se o rastreamento falhar
+      }
 
       console.log("Configuração concluída com sucesso");
-      onConfigComplete();
+
+      if (isMountedRef.current) {
+        onConfigComplete();
+      }
     } catch (error: any) {
       console.error("Erro ao configurar:", error);
+
+      if (!isMountedRef.current) {
+        setLoading(false);
+        return;
+      }
 
       let errorMessage = "Erro ao conectar com o servidor";
 
@@ -213,7 +255,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
 
       Alert.alert("Erro", errorMessage);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -262,7 +306,7 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Ex.: nomedaempresa.gestgas.com"
+                placeholder="Ex.: nomedaempresa.cotrium.com ou 192.168.1.100:3000"
                 placeholderTextColor="#999"
                 value={serverUrl}
                 onChangeText={(text) => setServerUrl(text.trim())}

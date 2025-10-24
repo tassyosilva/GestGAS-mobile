@@ -48,9 +48,12 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [historyButtonHeight, setHistoryButtonHeight] = useState(0);
 
+  // CORREÇÃO 1: Refs para controle de montagem e polling
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appState = useRef(AppState.currentState);
   const pedidosIdsAnteriores = useRef<Set<number>>(new Set());
+  const isMountedRef = useRef(true);
+  const isPollingActiveRef = useRef(false);
 
   const panelAnim = useRef(new Animated.Value(0)).current;
   const [isPanelRendered, setIsPanelRendered] = useState(false);
@@ -58,36 +61,68 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const limit = 20;
   const limitFinalizados = 10;
 
+  // CORREÇÃO 2: Adicionar cleanup geral do componente
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Garantir que polling seja parado
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   const loadTotalFinalizados = useCallback(async () => {
-    if (!user) return;
+    if (!user || !isMountedRef.current) return;
     try {
       const response = await pedidosService.listarPedidosFinalizados({
         entregador_id: user.id,
         page: 1,
         limit: 1,
       });
-      if (response && typeof response.total === "number") {
-        setTotalFinalizados(response.total);
-      } else {
-        setTotalFinalizados(0);
+      if (isMountedRef.current) {
+        if (response && typeof response.total === "number") {
+          setTotalFinalizados(response.total);
+        } else {
+          setTotalFinalizados(0);
+        }
       }
     } catch (_error) {
       console.error("Erro ao carregar total de finalizados:", _error);
-      setTotalFinalizados(0);
+      if (isMountedRef.current) {
+        setTotalFinalizados(0);
+      }
     }
   }, [user]);
 
   const loadPedidos = useCallback(
     async (isPolling = false) => {
-      if (!user) return;
+      if (!user || !isMountedRef.current) return;
+
+      // CORREÇÃO 3: Prevenir múltiplas chamadas simultâneas no polling
+      if (isPolling && isPollingActiveRef.current) {
+        console.log("Polling já em execução, pulando...");
+        return;
+      }
+
       try {
-        if (page === 0 && !isPolling) setLoading(true);
+        if (isPolling) {
+          isPollingActiveRef.current = true;
+        }
+
+        if (page === 0 && !isPolling && isMountedRef.current) {
+          setLoading(true);
+        }
 
         const response = await pedidosService.listarPedidosEntregador({
           entregador_id: user.id,
           page: page + 1,
           limit,
         });
+
+        if (!isMountedRef.current) return;
 
         if (response && response.pedidos && Array.isArray(response.pedidos)) {
           const pedidosValidos = response.pedidos.filter(
@@ -102,9 +137,13 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
             if (novosIds.length > 0) {
               console.log(`${novosIds.length} novo(s) pedido(s) detectado(s)`);
-              await notificationService.enviarNotificacaoNovosPedidos(
-                novosIds.length,
-              );
+              try {
+                await notificationService.enviarNotificacaoNovosPedidos(
+                  novosIds.length,
+                );
+              } catch (error) {
+                console.error("Erro ao enviar notificação:", error);
+              }
             }
 
             pedidosIdsAnteriores.current = idsAtuais;
@@ -114,16 +153,20 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             );
           }
 
-          setPedidos(pedidosValidos);
-          setTotal(typeof response.total === "number" ? response.total : 0);
+          if (isMountedRef.current) {
+            setPedidos(pedidosValidos);
+            setTotal(typeof response.total === "number" ? response.total : 0);
+          }
         } else {
-          setPedidos([]);
-          setTotal(0);
+          if (isMountedRef.current) {
+            setPedidos([]);
+            setTotal(0);
+          }
         }
       } catch (error: any) {
         console.error("Erro ao carregar entregas:", error);
 
-        if (!isPolling) {
+        if (!isPolling && isMountedRef.current) {
           setPedidos([]);
           setTotal(0);
 
@@ -141,9 +184,14 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
           Alert.alert("Erro", errorMessage);
         }
       } finally {
-        if (!isPolling) {
-          setLoading(false);
-          setRefreshing(false);
+        if (isMountedRef.current) {
+          if (!isPolling) {
+            setLoading(false);
+            setRefreshing(false);
+          }
+          if (isPolling) {
+            isPollingActiveRef.current = false;
+          }
         }
       }
     },
@@ -151,14 +199,18 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   );
 
   const loadPedidosFinalizados = useCallback(async () => {
-    if (!user || loadingFinalizados) return;
+    if (!user || loadingFinalizados || !isMountedRef.current) return;
     try {
-      setLoadingFinalizados(true);
+      if (isMountedRef.current) {
+        setLoadingFinalizados(true);
+      }
       const response = await pedidosService.listarPedidosFinalizados({
         entregador_id: user.id,
         page: pageFinalizados + 1,
         limit: limitFinalizados,
       });
+
+      if (!isMountedRef.current) return;
 
       if (response && response.pedidos && Array.isArray(response.pedidos)) {
         const pedidosResolvidosData = response.pedidos
@@ -175,46 +227,54 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             forma_pagamento: p.forma_pagamento || null,
           }));
 
-        setPedidosFinalizados((prevPedidos) => {
-          if (pageFinalizados === 0) {
-            return pedidosResolvidosData;
-          } else {
-            const prevIds = new Set(prevPedidos.map((p) => p.id));
-            const novos = pedidosResolvidosData.filter(
-              (p) => !prevIds.has(p.id),
-            );
-            return [...prevPedidos, ...novos];
-          }
-        });
+        if (isMountedRef.current) {
+          setPedidosFinalizados((prevPedidos) => {
+            if (pageFinalizados === 0) {
+              return pedidosResolvidosData;
+            } else {
+              const prevIds = new Set(prevPedidos.map((p) => p.id));
+              const novos = pedidosResolvidosData.filter(
+                (p) => !prevIds.has(p.id),
+              );
+              return [...prevPedidos, ...novos];
+            }
+          });
 
-        setTotalFinalizados(
-          typeof response.total === "number" ? response.total : 0,
-        );
-      } else if (pageFinalizados === 0) {
+          setTotalFinalizados(
+            typeof response.total === "number" ? response.total : 0,
+          );
+        }
+      } else if (pageFinalizados === 0 && isMountedRef.current) {
         setPedidosFinalizados([]);
         setTotalFinalizados(0);
       }
     } catch (_error: any) {
       console.error("Erro ao carregar pedidos finalizados:", _error);
-      if (pageFinalizados === 0) {
+      if (pageFinalizados === 0 && isMountedRef.current) {
         setPedidosFinalizados([]);
         setTotalFinalizados(0);
       }
     } finally {
-      setLoadingFinalizados(false);
+      if (isMountedRef.current) {
+        setLoadingFinalizados(false);
+      }
     }
   }, [user, loadingFinalizados, pageFinalizados, limitFinalizados]);
 
   const iniciarPolling = useCallback(() => {
     console.log("Iniciando polling...");
 
+    // CORREÇÃO 4: Limpar polling anterior antes de criar novo
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
 
     pollingIntervalRef.current = setInterval(() => {
-      console.log("Executando polling...");
-      loadPedidos(true);
+      if (isMountedRef.current) {
+        console.log("Executando polling...");
+        loadPedidos(true);
+      }
     }, POLLING_INTERVAL);
   }, [loadPedidos]);
 
@@ -224,8 +284,10 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    isPollingActiveRef.current = false;
   }, []);
 
+  // CORREÇÃO 5: Melhorar gerenciamento do AppState
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (
@@ -233,8 +295,10 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         nextAppState === "active"
       ) {
         console.log("App voltou para foreground - recarregando dados");
-        loadPedidos(false);
-        loadTotalFinalizados();
+        if (isMountedRef.current) {
+          loadPedidos(false);
+          loadTotalFinalizados();
+        }
       }
 
       appState.current = nextAppState;
@@ -245,16 +309,21 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     };
   }, [loadPedidos, loadTotalFinalizados]);
 
+  // CORREÇÃO 6: Proteger useFocusEffect com melhor cleanup
   useFocusEffect(
     useCallback(() => {
       console.log("Tela MinhasEntregas recebeu foco");
 
-      if (user) {
+      if (user && isMountedRef.current) {
         loadPedidos(false);
         loadTotalFinalizados();
       }
 
-      notificationService.limparBadge();
+      try {
+        notificationService.limparBadge();
+      } catch (error) {
+        console.error("Erro ao limpar badge:", error);
+      }
 
       iniciarPolling();
 
@@ -267,7 +336,11 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
   useEffect(() => {
     const solicitarPermissoesNotificacao = async () => {
-      await notificationService.solicitarPermissoes();
+      try {
+        await notificationService.solicitarPermissoes();
+      } catch (error) {
+        console.error("Erro ao solicitar permissões de notificação:", error);
+      }
     };
 
     solicitarPermissoesNotificacao();
@@ -278,34 +351,43 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   }, []);
 
   useEffect(() => {
-    if (user) {
+    if (user && isMountedRef.current) {
       loadPedidos();
       loadTotalFinalizados();
     }
   }, [user, page, loadPedidos, loadTotalFinalizados]);
 
   useEffect(() => {
-    if (user && pageFinalizados > 0) {
+    if (user && pageFinalizados > 0 && isMountedRef.current) {
       loadPedidosFinalizados();
     }
   }, [user, pageFinalizados, loadPedidosFinalizados]);
 
+  // CORREÇÃO 7: Proteger animações do painel
   useEffect(() => {
-    if (showFinalizados) {
-      setIsPanelRendered(true);
-      Animated.timing(panelAnim, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      Animated.timing(panelAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }).start(() => {
-        setIsPanelRendered(false);
-      });
+    if (!isMountedRef.current) return;
+
+    try {
+      if (showFinalizados) {
+        setIsPanelRendered(true);
+        Animated.timing(panelAnim, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: false,
+        }).start();
+      } else {
+        Animated.timing(panelAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false,
+        }).start(() => {
+          if (isMountedRef.current) {
+            setIsPanelRendered(false);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Erro na animação do painel:", error);
     }
   }, [showFinalizados, panelAnim]);
 
@@ -323,14 +405,20 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const loadUser = async () => {
     try {
       const userData = await authService.getUser();
-      setUser(userData);
+      if (isMountedRef.current) {
+        setUser(userData);
+      }
     } catch (error) {
       console.error("Erro ao carregar usuário:", error);
-      Alert.alert("Erro", "Não foi possível carregar dados do usuário");
+      if (isMountedRef.current) {
+        Alert.alert("Erro", "Não foi possível carregar dados do usuário");
+      }
     }
   };
 
   const onRefresh = useCallback(() => {
+    if (!isMountedRef.current) return;
+
     setRefreshing(true);
     setPage(0);
 
@@ -341,7 +429,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       setPageFinalizados(0);
       setPedidosFinalizados([]);
       setTimeout(() => {
-        loadPedidosFinalizados();
+        if (isMountedRef.current) {
+          loadPedidosFinalizados();
+        }
       }, 100);
     }
   }, [
@@ -352,7 +442,12 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   ]);
 
   const handlePedidoPress = (pedido: Pedido) => {
-    navigation.navigate("DetalhesPedido", { pedidoId: pedido.id });
+    try {
+      navigation.navigate("DetalhesPedido", { pedidoId: pedido.id });
+    } catch (error) {
+      console.error("Erro ao navegar para detalhes:", error);
+      Alert.alert("Erro", "Não foi possível abrir os detalhes do pedido");
+    }
   };
 
   const handleLogout = () => {
@@ -377,12 +472,18 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   };
 
   const handleLoadMoreFinalizados = () => {
-    if (pedidosFinalizados.length < totalFinalizados && !loadingFinalizados) {
+    if (
+      pedidosFinalizados.length < totalFinalizados &&
+      !loadingFinalizados &&
+      isMountedRef.current
+    ) {
       setPageFinalizados((prev) => prev + 1);
     }
   };
 
   const toggleFinalizados = () => {
+    if (!isMountedRef.current) return;
+
     const newState = !showFinalizados;
     setShowFinalizados(newState);
     if (newState && pedidosFinalizados.length === 0) {
@@ -403,18 +504,47 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     </View>
   );
 
+  // CORREÇÃO 8: Proteger renderização de pedidos finalizados
   const renderPedidoFinalizadoCard = useCallback(
     ({ item }: { item: PedidoResolvido }) => {
       if (!item || !item.id) return null;
 
       try {
-        const tempoEntrega =
-          item.data_entregador_atribuido && item.data_entrega
-            ? calcularTempoEntrega(
+        // CORREÇÃO 9: Validar dados antes de processar
+        let tempoEntrega = null;
+        if (item.data_entregador_atribuido && item.data_entrega) {
+          try {
+            const dataAtribuicao = new Date(item.data_entregador_atribuido);
+            const dataEntregaDate = new Date(item.data_entrega);
+
+            // Validar se as datas são válidas
+            if (
+              !isNaN(dataAtribuicao.getTime()) &&
+              !isNaN(dataEntregaDate.getTime())
+            ) {
+              tempoEntrega = calcularTempoEntrega(
                 item.data_entregador_atribuido,
                 item.data_entrega,
-              )
-            : null;
+              );
+            }
+          } catch (error) {
+            console.error("Erro ao calcular tempo de entrega:", error);
+          }
+        }
+
+        // CORREÇÃO 10: Validar formatação de data
+        let dataEntregaFormatada = "";
+        if (item.data_entrega) {
+          try {
+            const dataEntregaDate = new Date(item.data_entrega);
+            if (!isNaN(dataEntregaDate.getTime())) {
+              dataEntregaFormatada = formatShortDate(item.data_entrega);
+            }
+          } catch (error) {
+            console.error("Erro ao formatar data de entrega:", error);
+            dataEntregaFormatada = "Data inválida";
+          }
+        }
 
         return (
           <View style={styles.finalizadoCard}>
@@ -431,7 +561,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                   <Text style={styles.finalizadoText}>{item.bairro}</Text>
                 </View>
               )}
-              {item.data_entrega && (
+              {dataEntregaFormatada && (
                 <View style={styles.finalizadoRow}>
                   <Ionicons
                     name="checkmark-circle-outline"
@@ -441,7 +571,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                   <Text
                     style={[styles.finalizadoText, styles.finalizadoTextGreen]}
                   >
-                    Entregue: {formatShortDate(item.data_entrega)}
+                    Entregue: {dataEntregaFormatada}
                   </Text>
                 </View>
               )}
