@@ -22,7 +22,7 @@ import {
   formatDate,
   calcularTempoEspera,
 } from "../utils/formatters";
-import MapViewComponent from "../components/MapView";
+import LeafletMapView from "../components/LeafletMapView";
 import * as Linking from "expo-linking";
 import { gruposService } from "../services/gruposService";
 
@@ -799,7 +799,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     try {
       return (
         <View style={styles.mapContainer}>
-          <MapViewComponent
+          <LeafletMapView
             latitude={latitude}
             longitude={longitude}
             title={pedido?.cliente?.nome || "Cliente"}
