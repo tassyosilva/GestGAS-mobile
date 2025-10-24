@@ -9,13 +9,16 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  Animated, // Importa a API de Animação
+  Animated,
+  AppState,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 import { authService } from "../services/authService";
 import { pedidosService } from "../services/pedidoService";
+import { notificationService } from "../services/notificationService";
 import { Pedido, Usuario, PedidoResolvido } from "../types";
 import PedidoCard from "../components/PedidoCard";
 import { calcularTempoEntrega, formatShortDate } from "../utils/formatters";
@@ -25,6 +28,8 @@ interface Props {
   navigation: any;
   onLogout: () => void;
 }
+
+const POLLING_INTERVAL = 5000;
 
 export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const insets = useSafeAreaInsets();
@@ -42,51 +47,16 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const [user, setUser] = useState<Usuario | null>(null);
   const [showFinalizados, setShowFinalizados] = useState(false);
   const [historyButtonHeight, setHistoryButtonHeight] = useState(0);
-  const limit = 20;
-  const limitFinalizados = 10;
 
-  // --- Animação ---
-  // Valor da animação (de 0 para 1)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const appState = useRef(AppState.currentState);
+  const pedidosIdsAnteriores = useRef<Set<number>>(new Set());
+
   const panelAnim = useRef(new Animated.Value(0)).current;
-  // Estado para controlar a renderização (para animar a saída)
   const [isPanelRendered, setIsPanelRendered] = useState(false);
 
-  // Efeito para disparar a animação
-  useEffect(() => {
-    if (showFinalizados) {
-      // 1. Monta o componente
-      setIsPanelRendered(true);
-      // 2. Anima a entrada (subida)
-      Animated.timing(panelAnim, {
-        toValue: 1,
-        duration: 350, // Duração mais suave
-        useNativeDriver: false, // height e opacity não usam o driver nativo
-      }).start();
-    } else {
-      // 1. Anima a saída (descida)
-      Animated.timing(panelAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }).start(() => {
-        // 2. Desmonta o componente APÓS a animação
-        setIsPanelRendered(false);
-      });
-    }
-  }, [showFinalizados, panelAnim]);
-
-  // Estilos que serão animados
-  const panelAnimatedStyle = {
-    height: panelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ["0%", "60%"], // Anima a altura
-    }),
-    opacity: panelAnim.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [0, 0.7, 1], // Faz o fade in junto
-    }),
-  };
-  // --- Fim Animação ---
+  const limit = 20;
+  const limitFinalizados = 10;
 
   const loadTotalFinalizados = useCallback(async () => {
     if (!user) return;
@@ -107,49 +77,78 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     }
   }, [user]);
 
-  const loadPedidos = useCallback(async () => {
-    if (!user) return;
-    try {
-      if (page === 0) setLoading(true);
-      const response = await pedidosService.listarPedidosEntregador({
-        entregador_id: user.id,
-        page: page + 1,
-        limit,
-      });
+  const loadPedidos = useCallback(
+    async (isPolling = false) => {
+      if (!user) return;
+      try {
+        if (page === 0 && !isPolling) setLoading(true);
 
-      if (response && response.pedidos && Array.isArray(response.pedidos)) {
-        // Filtrar pedidos válidos
-        const pedidosValidos = response.pedidos.filter(
-          (p: any) => p && p.id && p.cliente,
-        );
-        setPedidos(pedidosValidos);
-        setTotal(typeof response.total === "number" ? response.total : 0);
-      } else {
-        setPedidos([]);
-        setTotal(0);
-      }
-    } catch (error: any) {
-      console.error("Erro ao carregar entregas:", error);
-      setPedidos([]);
-      setTotal(0);
+        const response = await pedidosService.listarPedidosEntregador({
+          entregador_id: user.id,
+          page: page + 1,
+          limit,
+        });
 
-      let errorMessage = "Erro ao carregar entregas";
-      if (
-        error.response?.status === 401 ||
-        error.message === "Sessão expirada"
-      ) {
-        errorMessage = "Sessão expirada. Faça login novamente.";
-        await authService.logout();
-        onLogout();
-      } else if (error.message.includes("Network Error")) {
-        errorMessage = "Erro de conexão. Verifique sua internet.";
+        if (response && response.pedidos && Array.isArray(response.pedidos)) {
+          const pedidosValidos = response.pedidos.filter(
+            (p: any) => p && p.id && p.cliente,
+          );
+
+          if (isPolling && pedidosValidos.length > 0) {
+            const idsAtuais = new Set(pedidosValidos.map((p: any) => p.id));
+            const novosIds = Array.from(idsAtuais).filter(
+              (id) => !pedidosIdsAnteriores.current.has(id),
+            );
+
+            if (novosIds.length > 0) {
+              console.log(`${novosIds.length} novo(s) pedido(s) detectado(s)`);
+              await notificationService.enviarNotificacaoNovosPedidos(
+                novosIds.length,
+              );
+            }
+
+            pedidosIdsAnteriores.current = idsAtuais;
+          } else if (!isPolling) {
+            pedidosIdsAnteriores.current = new Set(
+              pedidosValidos.map((p: any) => p.id),
+            );
+          }
+
+          setPedidos(pedidosValidos);
+          setTotal(typeof response.total === "number" ? response.total : 0);
+        } else {
+          setPedidos([]);
+          setTotal(0);
+        }
+      } catch (error: any) {
+        console.error("Erro ao carregar entregas:", error);
+
+        if (!isPolling) {
+          setPedidos([]);
+          setTotal(0);
+
+          let errorMessage = "Erro ao carregar entregas";
+          if (
+            error.response?.status === 401 ||
+            error.message === "Sessão expirada"
+          ) {
+            errorMessage = "Sessão expirada. Faça login novamente.";
+            await authService.logout();
+            onLogout();
+          } else if (error.message.includes("Network Error")) {
+            errorMessage = "Erro de conexão. Verifique sua internet.";
+          }
+          Alert.alert("Erro", errorMessage);
+        }
+      } finally {
+        if (!isPolling) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
-      Alert.alert("Erro", errorMessage);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user, page, onLogout]);
+    },
+    [user, page, onLogout],
+  );
 
   const loadPedidosFinalizados = useCallback(async () => {
     if (!user || loadingFinalizados) return;
@@ -163,7 +162,7 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 
       if (response && response.pedidos && Array.isArray(response.pedidos)) {
         const pedidosResolvidosData = response.pedidos
-          .filter((p: any) => p && p.id) // Filtrar pedidos nulos ou sem ID
+          .filter((p: any) => p && p.id)
           .map((p: any) => ({
             id: p.id,
             data_entregador_atribuido: p.data_entregador_atribuido || null,
@@ -202,11 +201,78 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     }
   }, [user, loadingFinalizados, pageFinalizados, limitFinalizados]);
 
+  const iniciarPolling = useCallback(() => {
+    console.log("Iniciando polling...");
+
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingIntervalRef.current = setInterval(() => {
+      console.log("Executando polling...");
+      loadPedidos(true);
+    }, POLLING_INTERVAL);
+  }, [loadPedidos]);
+
+  const pararPolling = useCallback(() => {
+    console.log("Parando polling...");
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        console.log("App voltou para foreground - recarregando dados");
+        loadPedidos(false);
+        loadTotalFinalizados();
+      }
+
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadPedidos, loadTotalFinalizados]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Tela MinhasEntregas recebeu foco");
+
+      if (user) {
+        loadPedidos(false);
+        loadTotalFinalizados();
+      }
+
+      notificationService.limparBadge();
+
+      iniciarPolling();
+
+      return () => {
+        console.log("Tela MinhasEntregas perdeu foco");
+        pararPolling();
+      };
+    }, [user, loadPedidos, loadTotalFinalizados, iniciarPolling, pararPolling]),
+  );
+
+  useEffect(() => {
+    const solicitarPermissoesNotificacao = async () => {
+      await notificationService.solicitarPermissoes();
+    };
+
+    solicitarPermissoesNotificacao();
+  }, []);
+
   useEffect(() => {
     loadUser();
   }, []);
 
-  // ATUALIZADO: Este useEffect agora carrega os dados iniciais
   useEffect(() => {
     if (user) {
       loadPedidos();
@@ -219,6 +285,36 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
       loadPedidosFinalizados();
     }
   }, [user, pageFinalizados, loadPedidosFinalizados]);
+
+  useEffect(() => {
+    if (showFinalizados) {
+      setIsPanelRendered(true);
+      Animated.timing(panelAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(panelAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      }).start(() => {
+        setIsPanelRendered(false);
+      });
+    }
+  }, [showFinalizados, panelAnim]);
+
+  const panelAnimatedStyle = {
+    height: panelAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["0%", "60%"],
+    }),
+    opacity: panelAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 0.7, 1],
+    }),
+  };
 
   const loadUser = async () => {
     try {
@@ -261,6 +357,8 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         style: "destructive",
         onPress: async () => {
           try {
+            pararPolling();
+            await notificationService.cancelarTodasNotificacoes();
             await authService.logout();
             onLogout();
           } catch (error) {
@@ -279,7 +377,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   };
 
   const toggleFinalizados = () => {
-    // Apenas alterna o estado de "intenção"
     const newState = !showFinalizados;
     setShowFinalizados(newState);
     if (newState && pedidosFinalizados.length === 0) {
@@ -323,7 +420,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
           <View style={styles.finalizadoInfo}>
             {item.bairro && typeof item.bairro === "string" && (
               <View style={styles.finalizadoRow}>
-                {/* ÍCONE COLORIDO (VERMELHO) */}
                 <Ionicons name="location-outline" size={16} color="#f44336" />
                 <Text style={styles.finalizadoText}>{item.bairro}</Text>
               </View>
@@ -333,16 +429,17 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
                 <Ionicons
                   name="checkmark-circle-outline"
                   size={16}
-                  color="#4caf50" // Cor verde para "Entregue"
+                  color="#4caf50"
                 />
-                <Text style={[styles.finalizadoText, { color: "#4caf50" }]}>
+                <Text
+                  style={[styles.finalizadoText, styles.finalizadoTextGreen]}
+                >
                   Entregue: {formatShortDate(item.data_entrega)}
                 </Text>
               </View>
             )}
             {tempoEntrega && (
               <View style={styles.finalizadoRow}>
-                {/* ÍCONE COLORIDO (LARANJA) */}
                 <Ionicons name="time-outline" size={16} color="#ff9800" />
                 <Text style={styles.finalizadoText}>
                   Tempo de entrega: {tempoEntrega}
@@ -352,7 +449,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             {item.forma_pagamento &&
               typeof item.forma_pagamento === "string" && (
                 <View style={styles.finalizadoRow}>
-                  {/* ÍCONE COLORIDO (AZUL) */}
                   <Ionicons name="card-outline" size={16} color="#1976d2" />
                   <Text style={styles.finalizadoText}>
                     {item.forma_pagamento}
@@ -382,13 +478,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Cabeçalho com Gradiente */}
       <LinearGradient
         colors={["#1565c0", "#1976d2"]}
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 10 }, // Usa insets para padding seguro
-        ]}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
@@ -401,7 +493,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Cartão de Estatísticas (Estilo do DetalhesPedidoScreen) */}
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
           <Text style={styles.statValue}>{total}</Text>
@@ -437,11 +528,9 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         }
       />
 
-      {/* Botão de Histórico (Estilo Melhorado) */}
       <TouchableOpacity
-        style={styles.historicoButton} // Apenas posicionamento
+        style={styles.historicoButton}
         onPress={toggleFinalizados}
-        // Mede a altura do botão para posicionar o painel
         onLayout={(event) => {
           const { height } = event.nativeEvent.layout;
           if (height > 0 && height !== historyButtonHeight) {
@@ -454,7 +543,6 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
           style={[
             styles.historicoButtonGradient,
             {
-              // Adiciona o inset ao padding original
               paddingBottom:
                 styles.historicoButtonGradient.paddingBottom + insets.bottom,
             },
@@ -473,18 +561,14 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Painel de Histórico (Agora Animado) */}
       {isPanelRendered && (
         <Animated.View
           style={[
             styles.finalizadosContainer,
-            // Posiciona dinamicamente acima do botão
             { bottom: historyButtonHeight },
-            // Aplica os estilos de animação (height, opacity)
             panelAnimatedStyle,
           ]}
         >
-          {/* Cabeçalho do Painel com Gradiente */}
           <LinearGradient
             colors={["#1565c0", "#1976d2"]}
             style={styles.finalizadosHeader}
@@ -528,16 +612,14 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5", // Fundo cinza claro
+    backgroundColor: "#f5f5f5",
   },
   header: {
-    // backgroundColor removido, agora é um gradiente
     paddingBottom: 20,
     paddingHorizontal: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    // paddingTop é definido dinamicamente com insets
   },
   headerTitle: {
     fontSize: 24,
@@ -557,9 +639,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#fff",
     marginHorizontal: 16,
-    marginTop: -10, // Puxa para cima do header
+    marginTop: -10,
     marginBottom: 16,
-    borderRadius: 12, // Borda arredondada
+    borderRadius: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -568,7 +650,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    paddingVertical: 16, // Mais preenchimento vertical
+    paddingVertical: 16,
     paddingHorizontal: 10,
     alignItems: "center",
     borderRightWidth: 1,
@@ -584,16 +666,16 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   statLabel: {
-    fontSize: 11, // Um pouco menor
+    fontSize: 11,
     fontWeight: "bold",
     color: "#666",
     marginTop: 4,
     textAlign: "center",
-    letterSpacing: 0.5, // Mais espaçamento
+    letterSpacing: 0.5,
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100, // Espaço para o botão de histórico
+    paddingBottom: 100,
   },
   emptyContainer: {
     alignItems: "center",
@@ -604,12 +686,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#555", // Cor mais escura
+    color: "#555",
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#999", // Cor mais clara
+    color: "#999",
     marginTop: 8,
     textAlign: "center",
     paddingHorizontal: 40,
@@ -623,7 +705,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    // Estilos de layout movidos para historicoButtonGradient
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -634,14 +715,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 16, // Padding ajustado
-    paddingBottom: Platform.OS === "android" ? 14 : 14, // Padding base
+    paddingTop: 16,
+    paddingBottom: Platform.OS === "android" ? 10 : 14,
     gap: 10,
   },
   historicoButtonText: {
     color: "#fff",
     fontSize: 17,
-    fontWeight: "700", // Mais forte
+    fontWeight: "700",
     letterSpacing: 0.3,
   },
   finalizadosContainer: {
@@ -649,18 +730,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#fff",
-    // height é controlado pela animação
-    // Cantos arredondados como o modal
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    // Sombra mais suave
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 10,
-    // 'bottom' é aplicado dinamicamente
-    overflow: "hidden", // Garante que a animação de altura funcione
+    overflow: "hidden",
   },
   finalizadosHeader: {
     flexDirection: "row",
@@ -668,14 +745,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 18,
     paddingHorizontal: 20,
-    // Cantos arredondados para o gradiente
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
   finalizadosTitle: {
-    fontSize: 18, // Maior
-    fontWeight: "bold", // Mais forte
-    color: "#fff", // Cor branca no gradiente
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
     letterSpacing: 0.3,
   },
   finalizadosListContent: {
@@ -699,17 +775,16 @@ const styles = StyleSheet.create({
   },
   finalizadoCard: {
     backgroundColor: "#fff",
-    borderRadius: 16, // Mais arredondado
-    padding: 18, // Mais preenchimento
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 8,
     marginTop: 8,
-    // Sombra do 'section'
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 4,
-    borderLeftWidth: 4, // Borda mais espessa
+    borderLeftWidth: 4,
     borderLeftColor: "#4caf50",
   },
   finalizadoHeader: {
@@ -728,23 +803,26 @@ const styles = StyleSheet.create({
   },
   finalizadoCliente: {
     fontSize: 15,
-    fontWeight: "bold", // Destaque
+    fontWeight: "bold",
     color: "#333",
     flex: 1,
     textAlign: "right",
     marginLeft: 10,
   },
   finalizadoInfo: {
-    gap: 8, // Espaço entre as linhas
+    gap: 8,
   },
   finalizadoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8, // Espaço entre ícone e texto
+    gap: 8,
   },
   finalizadoText: {
-    fontSize: 14, // Maior para legibilidade
-    color: "#555", // Cor de texto principal
-    flex: 1, // Permite quebra de linha
+    fontSize: 14,
+    color: "#555",
+    flex: 1,
+  },
+  finalizadoTextGreen: {
+    color: "#4caf50",
   },
 });
