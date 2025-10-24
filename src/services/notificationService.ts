@@ -41,6 +41,10 @@ class NotificationService {
           enableVibrate: true,
           enableLights: true,
           lightColor: "#1976d2",
+          lockscreenVisibility:
+            Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+          showBadge: true,
         });
       }
 
@@ -83,8 +87,11 @@ class NotificationService {
           priority: Notifications.AndroidNotificationPriority.MAX,
           vibrate: [0, 250, 250, 250],
           data: { tipo: "novos_pedidos", quantidade },
+          sticky: false,
+          autoDismiss: false,
+          categoryIdentifier: "entregas",
         },
-        trigger: null, // Notificação imediata
+        trigger: null,
       });
 
       this.lastNotificationTime = now;

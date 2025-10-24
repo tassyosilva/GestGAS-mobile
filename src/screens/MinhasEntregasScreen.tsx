@@ -29,7 +29,7 @@ interface Props {
   onLogout: () => void;
 }
 
-const POLLING_INTERVAL = 5000;
+const POLLING_INTERVAL = 5000; // 5 segundos
 
 export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const insets = useSafeAreaInsets();
@@ -175,14 +175,18 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
             forma_pagamento: p.forma_pagamento || null,
           }));
 
-        if (pageFinalizados === 0) {
-          setPedidosFinalizados(pedidosResolvidosData);
-        } else {
-          setPedidosFinalizados((prevPedidos) => [
-            ...prevPedidos,
-            ...pedidosResolvidosData,
-          ]);
-        }
+        setPedidosFinalizados((prevPedidos) => {
+          if (pageFinalizados === 0) {
+            return pedidosResolvidosData;
+          } else {
+            const prevIds = new Set(prevPedidos.map((p) => p.id));
+            const novos = pedidosResolvidosData.filter(
+              (p) => !prevIds.has(p.id),
+            );
+            return [...prevPedidos, ...novos];
+          }
+        });
+
         setTotalFinalizados(
           typeof response.total === "number" ? response.total : 0,
         );
@@ -329,14 +333,16 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setPage(0);
-    setPageFinalizados(0);
-    setPedidosFinalizados([]);
 
     loadPedidos();
     loadTotalFinalizados();
 
     if (showFinalizados) {
-      loadPedidosFinalizados();
+      setPageFinalizados(0);
+      setPedidosFinalizados([]);
+      setTimeout(() => {
+        loadPedidosFinalizados();
+      }, 100);
     }
   }, [
     showFinalizados,
@@ -397,72 +403,75 @@ export default function MinhasEntregasScreen({ navigation, onLogout }: Props) {
     </View>
   );
 
-  const renderPedidoFinalizadoCard = ({ item }: { item: PedidoResolvido }) => {
-    if (!item || !item.id) return null;
+  const renderPedidoFinalizadoCard = useCallback(
+    ({ item }: { item: PedidoResolvido }) => {
+      if (!item || !item.id) return null;
 
-    try {
-      const tempoEntrega =
-        item.data_entregador_atribuido && item.data_entrega
-          ? calcularTempoEntrega(
-              item.data_entregador_atribuido,
-              item.data_entrega,
-            )
-          : null;
+      try {
+        const tempoEntrega =
+          item.data_entregador_atribuido && item.data_entrega
+            ? calcularTempoEntrega(
+                item.data_entregador_atribuido,
+                item.data_entrega,
+              )
+            : null;
 
-      return (
-        <View style={styles.finalizadoCard}>
-          <View style={styles.finalizadoHeader}>
-            <Text style={styles.finalizadoId}>Pedido #{item.id}</Text>
-            <Text style={styles.finalizadoCliente}>
-              {item.cliente_nome || "Cliente"}
-            </Text>
-          </View>
-          <View style={styles.finalizadoInfo}>
-            {item.bairro && typeof item.bairro === "string" && (
-              <View style={styles.finalizadoRow}>
-                <Ionicons name="location-outline" size={16} color="#f44336" />
-                <Text style={styles.finalizadoText}>{item.bairro}</Text>
-              </View>
-            )}
-            {item.data_entrega && (
-              <View style={styles.finalizadoRow}>
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={16}
-                  color="#4caf50"
-                />
-                <Text
-                  style={[styles.finalizadoText, styles.finalizadoTextGreen]}
-                >
-                  Entregue: {formatShortDate(item.data_entrega)}
-                </Text>
-              </View>
-            )}
-            {tempoEntrega && (
-              <View style={styles.finalizadoRow}>
-                <Ionicons name="time-outline" size={16} color="#ff9800" />
-                <Text style={styles.finalizadoText}>
-                  Tempo de entrega: {tempoEntrega}
-                </Text>
-              </View>
-            )}
-            {item.forma_pagamento &&
-              typeof item.forma_pagamento === "string" && (
+        return (
+          <View style={styles.finalizadoCard}>
+            <View style={styles.finalizadoHeader}>
+              <Text style={styles.finalizadoId}>Pedido #{item.id}</Text>
+              <Text style={styles.finalizadoCliente}>
+                {item.cliente_nome || "Cliente"}
+              </Text>
+            </View>
+            <View style={styles.finalizadoInfo}>
+              {item.bairro && typeof item.bairro === "string" && (
                 <View style={styles.finalizadoRow}>
-                  <Ionicons name="card-outline" size={16} color="#1976d2" />
-                  <Text style={styles.finalizadoText}>
-                    {item.forma_pagamento}
+                  <Ionicons name="location-outline" size={16} color="#f44336" />
+                  <Text style={styles.finalizadoText}>{item.bairro}</Text>
+                </View>
+              )}
+              {item.data_entrega && (
+                <View style={styles.finalizadoRow}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color="#4caf50"
+                  />
+                  <Text
+                    style={[styles.finalizadoText, styles.finalizadoTextGreen]}
+                  >
+                    Entregue: {formatShortDate(item.data_entrega)}
                   </Text>
                 </View>
               )}
+              {tempoEntrega && (
+                <View style={styles.finalizadoRow}>
+                  <Ionicons name="time-outline" size={16} color="#ff9800" />
+                  <Text style={styles.finalizadoText}>
+                    Tempo de entrega: {tempoEntrega}
+                  </Text>
+                </View>
+              )}
+              {item.forma_pagamento &&
+                typeof item.forma_pagamento === "string" && (
+                  <View style={styles.finalizadoRow}>
+                    <Ionicons name="card-outline" size={16} color="#1976d2" />
+                    <Text style={styles.finalizadoText}>
+                      {item.forma_pagamento}
+                    </Text>
+                  </View>
+                )}
+            </View>
           </View>
-        </View>
-      );
-    } catch (error) {
-      console.error("Erro ao renderizar pedido finalizado:", error);
-      return null;
-    }
-  };
+        );
+      } catch (error) {
+        console.error("Erro ao renderizar pedido finalizado:", error);
+        return null;
+      }
+    },
+    [],
+  );
 
   const renderFooter = () => {
     if (!loading || pedidos.length === 0) return null;
@@ -716,7 +725,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 16,
-    paddingBottom: Platform.OS === "android" ? 10 : 14,
+    paddingBottom: Platform.OS === "android" ? 14 : 14,
     gap: 10,
   },
   historicoButtonText: {
