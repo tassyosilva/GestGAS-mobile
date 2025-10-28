@@ -38,7 +38,7 @@ const getStatusPagamentoInfo = (
     };
   } else {
     return {
-      label: "Aguardando Pagamento",
+      label: `Aguardando Pagamento - ${formaPagamento || "N/A"}`,
       color: "#ff9800",
     };
   }
