@@ -1010,6 +1010,30 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
                   : `Aguardando Pagamento - ${pedido.forma_pagamento || "N/A"}`}
               </Text>
             </LinearGradient>
+
+            {pedido.forma_pagamento === "Múltiplo" &&
+              pedido.pagamentos &&
+              pedido.pagamentos.length > 0 && (
+                <View style={styles.pagamentosMultiplosContainer}>
+                  {pedido.pagamentos.map((pagamento, index) => (
+                    <View key={index} style={styles.pagamentoItem}>
+                      <View style={styles.pagamentoIconContainer}>
+                        <Ionicons
+                          name="card-outline"
+                          size={16}
+                          color="#1976d2"
+                        />
+                      </View>
+                      <Text style={styles.pagamentoNome}>
+                        {pagamento.forma_pagamento.nome}
+                      </Text>
+                      <Text style={styles.pagamentoValor}>
+                        {formatCurrency(pagamento.valor)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
           </View>
         </View>
 
@@ -1741,5 +1765,41 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 20,
+  },
+  pagamentosMultiplosContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+    width: "100%",
+  },
+  pagamentoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  pagamentoIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#e3f2fd",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  pagamentoNome: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  pagamentoValor: {
+    fontSize: 14,
+    color: "#1976d2",
+    fontWeight: "700",
   },
 });

@@ -34,6 +34,15 @@ export interface ItemPedido {
   grupo_nome?: string;
 }
 
+export interface PagamentoPedido {
+  id: number;
+  forma_pagamento: {
+    id: number;
+    nome: string;
+  };
+  valor: number;
+}
+
 export interface Pedido {
   id: number;
   cliente: Cliente;
@@ -44,6 +53,7 @@ export interface Pedido {
   itens?: ItemPedido[];
   forma_pagamento?: string;
   pagamento_realizado?: boolean;
+  pagamentos?: PagamentoPedido[];
 }
 
 export interface PedidoDetalhes extends Pedido {
@@ -51,6 +61,7 @@ export interface PedidoDetalhes extends Pedido {
   forma_pagamento?: string;
   pagamento_realizado?: boolean;
   observacoes?: string;
+  pagamentos?: PagamentoPedido[];
 }
 
 export interface AppConfig {
