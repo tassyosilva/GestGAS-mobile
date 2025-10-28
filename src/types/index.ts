@@ -50,6 +50,7 @@ export interface PedidoDetalhes extends Pedido {
   itens: ItemPedido[];
   forma_pagamento?: string;
   pagamento_realizado?: boolean;
+  observacoes?: string;
 }
 
 export interface AppConfig {
@@ -107,4 +108,5 @@ export interface PedidoResolvido {
   bairro?: string;
   tempo_entrega?: string;
   forma_pagamento?: string;
+  observacoes?: string;
 }

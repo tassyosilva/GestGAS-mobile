@@ -701,27 +701,51 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
 
       if (diffDias > 30) {
         return (
-          <View style={styles.tempoEsperaContainer}>
-            <Ionicons name="time" size={18} color="#ff9800" />
-            <Text style={styles.tempoEsperaText}>
-              Criado em {formatDate(pedido.criado_em)}
-            </Text>
-          </View>
+          <>
+            <View style={styles.tempoEsperaContainer}>
+              <Ionicons name="time" size={18} color="#ff9800" />
+              <Text style={styles.tempoEsperaText}>
+                Criado em {formatDate(pedido.criado_em)}
+              </Text>
+            </View>
+            {pedido.observacoes && pedido.observacoes.trim() !== "" && (
+              <View style={styles.observacoesPedidoContainer}>
+                <Text style={styles.observacoesPedidoLabel}>
+                  Observação do pedido:
+                </Text>
+                <Text style={styles.observacoesPedidoText}>
+                  {pedido.observacoes}
+                </Text>
+              </View>
+            )}
+          </>
         );
       }
 
       const tempoEspera = calcularTempoEspera(pedido.criado_em);
       return (
-        <View style={styles.tempoEsperaContainer}>
-          <Ionicons name="time" size={18} color="#ff9800" />
-          <Text
-            style={styles.tempoEsperaText}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {tempoEspera}
-          </Text>
-        </View>
+        <>
+          <View style={styles.tempoEsperaContainer}>
+            <Ionicons name="time" size={18} color="#ff9800" />
+            <Text
+              style={styles.tempoEsperaText}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {tempoEspera}
+            </Text>
+          </View>
+          {pedido.observacoes && pedido.observacoes.trim() !== "" && (
+            <View style={styles.observacoesPedidoContainer}>
+              <Text style={styles.observacoesPedidoLabel}>
+                Observação do pedido:
+              </Text>
+              <Text style={styles.observacoesPedidoText}>
+                {pedido.observacoes}
+              </Text>
+            </View>
+          )}
+        </>
       );
     } catch (error) {
       console.error("Erro ao calcular tempo de espera:", error);
@@ -983,7 +1007,7 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
               <Text style={styles.statusPagamentoText}>
                 {pedido.pagamento_realizado
                   ? `Pago - ${pedido.forma_pagamento || "N/A"}`
-                  : "Aguardando Pagamento"}
+                  : `Aguardando Pagamento - ${pedido.forma_pagamento || "N/A"}`}
               </Text>
             </LinearGradient>
           </View>
@@ -1654,9 +1678,30 @@ const styles = StyleSheet.create({
   },
   tempoEsperaText: {
     fontSize: 14,
-    color: "#ff9800",
+    color: "#e78b00ff",
     marginLeft: 10,
     fontWeight: "600",
+  },
+  observacoesPedidoContainer: {
+    flexDirection: "column",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    backgroundColor: "#fde3e3ff",
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: "#f32121ff",
+  },
+  observacoesPedidoLabel: {
+    fontSize: 13,
+    color: "#d21919ff",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  observacoesPedidoText: {
+    fontSize: 14,
+    color: "#000000ff",
+    lineHeight: 20,
   },
   statusPagamentoBadge: {
     paddingHorizontal: 18,
