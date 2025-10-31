@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import {
   createNativeStackNavigator,
@@ -10,7 +10,11 @@ import MinhasEntregasScreen from "./src/screens/MinhasEntregasScreen";
 import DetalhesPedidoScreen from "./src/screens/DetalhesPedidoScreen";
 import { authService } from "./src/services/authService";
 import { storageService } from "./src/services/storageService";
-import { Alert } from "react-native";
+import { garantirRastreamentoAtivo } from "./src/services/locationService";
+import { Alert, AppState as RNAppState } from "react-native";
+
+// IMPORTANTE: Importar a definição da task ANTES de qualquer coisa
+import "./src/services/locationTaskDefinition";
 
 // 1. Definição dos tipos das rotas e seus parâmetros
 type RootStackParamList = {
@@ -44,6 +48,7 @@ type AppState =
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>("loading");
+  const appStateRef = useRef(RNAppState.currentState);
 
   // Usamos useCallback para checkInitialState para evitar recriação desnecessária
   const checkInitialState = useCallback(async () => {
@@ -69,6 +74,35 @@ export default function App() {
   useEffect(() => {
     checkInitialState();
   }, [checkInitialState]); // Adicionada dependência
+
+  // Gerenciar rastreamento quando app volta do background
+  useEffect(() => {
+    const subscription = RNAppState.addEventListener(
+      "change",
+      async (nextAppState) => {
+        if (
+          appStateRef.current.match(/inactive|background/) &&
+          nextAppState === "active"
+        ) {
+          console.log("App voltou para foreground - verificando rastreamento");
+
+          // Se o usuário está autenticado, garantir que rastreamento está ativo
+          if (appState === "authenticated") {
+            try {
+              await garantirRastreamentoAtivo();
+            } catch (error) {
+              console.error("Erro ao garantir rastreamento ativo:", error);
+            }
+          }
+        }
+        appStateRef.current = nextAppState;
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [appState]);
 
   const handleConfigComplete = useCallback(() => {
     setAppState("createPin");
@@ -102,6 +136,14 @@ export default function App() {
       const success = await authService.loginWithCredentials();
       if (success) {
         setAppState("authenticated");
+
+        // Garantir que rastreamento está ativo após login com PIN
+        try {
+          await garantirRastreamentoAtivo();
+        } catch (trackingError) {
+          console.error("Erro ao iniciar rastreamento:", trackingError);
+          // Não bloqueia o login se o rastreamento falhar
+        }
       } else {
         Alert.alert(
           "Erro",

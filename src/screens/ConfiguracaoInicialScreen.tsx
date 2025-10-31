@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../services/authService";
 import axios from "axios";
-import { iniciarRastreamento } from "../services/locationService";
+import { garantirRastreamentoAtivo } from "../services/locationService";
 
 interface Props {
   onConfigComplete: () => void;
@@ -206,9 +206,9 @@ export default function ConfiguracaoInicialScreen({ onConfigComplete }: Props) {
         senha,
       });
 
-      // CORREÇÃO 4: Proteger inicialização de rastreamento
+      // Proteger inicialização de rastreamento
       try {
-        await iniciarRastreamento();
+        await garantirRastreamentoAtivo();
       } catch (trackingError) {
         console.error("Erro ao iniciar rastreamento:", trackingError);
         // Não bloqueia o login se o rastreamento falhar
