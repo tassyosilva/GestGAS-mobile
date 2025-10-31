@@ -405,6 +405,66 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     }
   };
 
+  // Função para ligar para o cliente
+  const ligarParaCliente = async (telefone: string) => {
+    if (!telefone || !pedido) return;
+
+    try {
+      // Registrar o contato no backend (não bloqueante)
+      pedidosService.registrarContato(pedido.id, pedido.cliente.id, "telefone");
+
+      // Limpar o telefone (remover caracteres não numéricos e espaços)
+      const telefoneLimpo = telefone.replace(/\D/g, "");
+
+      // Abrir o discador do telefone
+      const url = `tel:${telefoneLimpo}`;
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error("Erro ao ligar para cliente:", error);
+      Alert.alert("Erro", "Não foi possível abrir o discador de telefone");
+    }
+  };
+
+  // Função para abrir WhatsApp
+  const abrirWhatsApp = async (telefone: string) => {
+    if (!telefone || !pedido) return;
+
+    try {
+      // Registrar o contato no backend
+      await pedidosService.registrarContato(
+        pedido.id,
+        pedido.cliente.id,
+        "whatsapp",
+      );
+
+      // Limpar o telefone (remover caracteres não numéricos)
+      const telefoneLimpo = telefone.replace(/\D/g, "");
+
+      // Adicionar código do país se não tiver (Brasil = 55)
+      let telefoneCompleto = telefoneLimpo;
+      if (!telefoneLimpo.startsWith("55") && telefoneLimpo.length <= 11) {
+        telefoneCompleto = `55${telefoneLimpo}`;
+      }
+
+      // URL do WhatsApp
+      const url = `whatsapp://send?phone=${telefoneCompleto}`;
+
+      const canOpen = await Linking.canOpenURL(url);
+
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert(
+          "WhatsApp não encontrado",
+          "O WhatsApp não está instalado neste dispositivo",
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao abrir WhatsApp:", error);
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
+    }
+  };
+
   const handleConfirmarEntrega = async () => {
     if (!pedido) return;
 
@@ -898,13 +958,28 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
             <Text style={styles.sectionTitle}>Cliente</Text>
           </View>
           <Text style={styles.clienteNome}>{pedido.cliente.nome}</Text>
-          <TouchableOpacity
-            style={styles.telefoneRow}
-            onPress={() => Linking.openURL(`tel:${pedido.cliente.telefone}`)}
-          >
-            <Ionicons name="call" size={18} color="#1976d2" />
-            <Text style={styles.telefoneText}>{pedido.cliente.telefone}</Text>
-          </TouchableOpacity>
+
+          {/* Botões de contato com telefone e WhatsApp */}
+          <View style={styles.contatoButtonsContainer}>
+            <TouchableOpacity
+              style={styles.telefoneButton}
+              onPress={() => ligarParaCliente(pedido.cliente.telefone)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="call" size={20} color="#1976d2" />
+              <Text style={styles.telefoneButtonText}>Ligar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.whatsappButton}
+              onPress={() => abrirWhatsApp(pedido.cliente.telefone)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <Text style={styles.whatsappButtonText}>WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+
           {renderTempoEspera()}
         </View>
 
@@ -1801,5 +1876,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1976d2",
     fontWeight: "700",
+  },
+  contatoButtonsContainer: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  telefoneButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#e3f2fd",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1976d2",
+  },
+  telefoneButtonText: {
+    fontSize: 15,
+    color: "#1976d2",
+    marginLeft: 8,
+    fontWeight: "600",
+  },
+  whatsappButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#e8f5e9",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#25D366",
+  },
+  whatsappButtonText: {
+    fontSize: 15,
+    color: "#25D366",
+    marginLeft: 8,
+    fontWeight: "600",
+  },
+  telefoneInfo: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 8,
   },
 });

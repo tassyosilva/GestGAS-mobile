@@ -97,6 +97,25 @@ class PedidosService {
       return [];
     }
   }
+
+  // Registrar contato do entregador com o cliente
+  async registrarContato(
+    pedidoId: number,
+    clienteId: number,
+    tipoContato: "telefone" | "whatsapp",
+  ): Promise<void> {
+    try {
+      await api.post(API_ENDPOINTS.REGISTRAR_CONTATO, {
+        pedido_id: pedidoId,
+        cliente_id: clienteId,
+        tipo_contato: tipoContato,
+      });
+      console.log(`Contato via ${tipoContato} registrado com sucesso`);
+    } catch (error) {
+      console.error("Erro ao registrar contato:", error);
+      // Erro silencioso - não bloqueia a ação do usuário
+    }
+  }
 }
 
 export const pedidosService = new PedidosService();
