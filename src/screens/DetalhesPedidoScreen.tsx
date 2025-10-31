@@ -430,12 +430,8 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
     if (!telefone || !pedido) return;
 
     try {
-      // Registrar o contato no backend
-      await pedidosService.registrarContato(
-        pedido.id,
-        pedido.cliente.id,
-        "whatsapp",
-      );
+      // Registrar o contato no backend (não bloqueante)
+      pedidosService.registrarContato(pedido.id, pedido.cliente.id, "whatsapp");
 
       // Limpar o telefone (remover caracteres não numéricos)
       const telefoneLimpo = telefone.replace(/\D/g, "");
@@ -449,19 +445,16 @@ export default function DetalhesPedidoScreen({ route, navigation }: Props) {
       // URL do WhatsApp
       const url = `whatsapp://send?phone=${telefoneCompleto}`;
 
-      const canOpen = await Linking.canOpenURL(url);
-
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert(
-          "WhatsApp não encontrado",
-          "O WhatsApp não está instalado neste dispositivo",
-        );
-      }
+      // Tentar abrir diretamente, sem verificar com canOpenURL
+      // Isso resolve o problema no Android 11+ onde canOpenURL retorna false
+      // mesmo com o WhatsApp instalado
+      await Linking.openURL(url);
     } catch (error) {
       console.error("Erro ao abrir WhatsApp:", error);
-      Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
+      Alert.alert(
+        "WhatsApp não encontrado",
+        "O WhatsApp não está instalado neste dispositivo ou não foi possível abrir o aplicativo",
+      );
     }
   };
 
