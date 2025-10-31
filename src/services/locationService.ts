@@ -109,6 +109,10 @@ export async function iniciarRastreamento(): Promise<boolean> {
       accuracy: Location.Accuracy.Balanced,
       timeInterval: LOCATION_INTERVAL,
       distanceInterval: 0,
+      // Melhorias para dispositivos Xiaomi e Android em geral
+      deferredUpdatesInterval: LOCATION_INTERVAL, // Sincroniza com timeInterval
+      pausesUpdatesAutomatically: false, // Mantém rastreamento mesmo quando parado
+      showsBackgroundLocationIndicator: true, // Ícone na barra de status (Android 10+)
       foregroundService: {
         notificationTitle: "Rastreamento Ativo",
         notificationBody: "Sua localização está sendo compartilhada",
